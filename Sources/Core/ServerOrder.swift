@@ -39,11 +39,52 @@ public enum ServerOrder {
 struct ServerOrderStore {
     let url: URL
 
+    /// The app's refresh and the user's reorder can write from different threads.
+    private static let lock = NSLock()
+
     private struct File: Codable {
         var global: [String]
     }
 
     func global() throws -> [String] {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        return try read()
+    }
+
+    func setGlobal(_ names: [String]) throws {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        try write(names)
+    }
+
+    func pinGlobal(_ names: [String]) throws {
+        try change { saved in
+            let known = Set(saved)
+            saved = names.filter { !known.contains($0) } + saved
+        }
+    }
+
+    func removeGlobal(_ name: String) throws {
+        try change { $0.removeAll { $0 == name } }
+    }
+
+    func renameGlobal(_ oldName: String, to newName: String) throws {
+        guard oldName != newName else { return }
+        try change { saved in saved = saved.map { $0 == oldName ? newName : $0 } }
+    }
+
+    /// Writes only when `edit` changed the list.
+    private func change(_ edit: (inout [String]) -> Void) throws {
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        let saved = try read()
+        var names = saved
+        edit(&names)
+        if names != saved { try write(names) }
+    }
+
+    private func read() throws -> [String] {
         let data: Data
         do {
             data = try Data(contentsOf: url)
@@ -59,7 +100,7 @@ struct ServerOrderStore {
         }
     }
 
-    func setGlobal(_ names: [String]) throws {
+    private func write(_ names: [String]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted]
         let data: Data
@@ -76,11 +117,5 @@ struct ServerOrderStore {
             throw MCPManagerError.io(path: directory.path, detail: error.localizedDescription)
         }
         try FileIO(backupDir: directory).atomicWrite(data, to: url, permissions: 0o600)
-    }
-
-    func renameGlobal(_ oldName: String, to newName: String) throws {
-        let names = try global()
-        guard oldName != newName, names.contains(oldName) else { return }
-        try setGlobal(names.map { $0 == oldName ? newName : $0 })
     }
 }

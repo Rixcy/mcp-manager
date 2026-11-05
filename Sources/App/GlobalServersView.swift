@@ -1,11 +1,10 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct GlobalServersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var editing: GlobalServer?
     @State private var removing: GlobalServer?
-    @State private var dragging: String?
+    @State private var dropTarget: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,15 +69,18 @@ struct GlobalServersView: View {
         } else {
             ServerList(items: model.globals) { server in
                 GlobalServerRow(server: server, onEdit: { editing = server }, onRemove: { removing = server })
-                    .opacity(dragging == server.name ? 0.4 : 1)
-                    .onDrag {
-                        dragging = server.name
-                        return NSItemProvider(object: server.name as NSString)
+                    .background(dropTarget == server.name ? Theme.accent.opacity(0.12) : .clear)
+                    // The dragged name travels with the drop, so a cancelled drag leaves nothing behind.
+                    .draggable(server.name)
+                    .dropDestination(for: String.self) { names, _ in
+                        guard let name = names.first, name != server.name,
+                              model.globals.contains(where: { $0.name == name }) else { return false }
+                        withAnimation(.snappy(duration: 0.2)) { model.moveGlobal(name, onto: server.name) }
+                        return true
+                    } isTargeted: { targeted in
+                        if targeted { dropTarget = server.name } else if dropTarget == server.name { dropTarget = nil }
                     }
-                    .onDrop(of: [.text], delegate: ReorderDropDelegate(target: server.name, dragging: $dragging, model: model))
             }
-            // A drop between rows or on the list's edge still ends the drag and keeps the new order.
-            .onDrop(of: [.text], delegate: ReorderDropDelegate(target: nil, dragging: $dragging, model: model))
             filesNote
         }
     }
@@ -175,28 +177,3 @@ private struct GlobalServerRow: View {
     }
 }
 
-/// Moves the dragged row as it passes over others, and saves the order on drop.
-private struct ReorderDropDelegate: DropDelegate {
-    /// The row under the pointer; nil for the list as a whole.
-    let target: String?
-    @Binding var dragging: String?
-    let model: AppModel
-
-    func dropEntered(info: DropInfo) {
-        guard let dragging, let target, dragging != target else { return }
-        withAnimation(.snappy(duration: 0.2)) {
-            model.moveGlobal(dragging, onto: target, save: false)
-        }
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: dragging == nil ? .forbidden : .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        guard dragging != nil else { return false }
-        dragging = nil
-        model.saveGlobalOrder()
-        return true
-    }
-}

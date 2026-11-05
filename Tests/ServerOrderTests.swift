@@ -39,13 +39,42 @@ func runServerOrderTests() {
         }
     }
 
-    test("saveGlobalOrder: names no longer configured are ignored, and a re-added one returns on top") {
+    test("remove: a removed server loses its place, so adding it again puts it on top") {
         try withOrderHome { manager, _ in
             try manager.saveGlobalOrder(["gamma", "alpha", "Beta"])
             try manager.remove(name: "alpha")
-            try manager.saveGlobalOrder(try names(manager))
+            expectEqual(try names(manager), ["gamma", "Beta"])
             try manager.add(name: "alpha", config: stdio)
             expectEqual(try names(manager), ["alpha", "gamma", "Beta"])
+        }
+    }
+
+    test("remove: taking a server out of one client keeps its place") {
+        try withOrderHome { manager, _ in
+            try manager.saveGlobalOrder(["gamma", "Beta", "alpha"])
+            try manager.remove(name: "Beta", from: [.claude])
+            expectEqual(try names(manager), ["gamma", "Beta", "alpha"])
+        }
+    }
+
+    test("rememberGlobalOrder: pins new servers on top without undoing a newer saved order") {
+        try withOrderHome { manager, _ in
+            try manager.saveGlobalOrder(["gamma", "alpha", "Beta"])
+            // A refresh that read the configs before the user's reorder was saved.
+            manager.rememberGlobalOrder(["Beta", "alpha", "gamma"])
+            expectEqual(try names(manager), ["gamma", "alpha", "Beta"])
+
+            try manager.add(name: "delta", config: stdio)
+            manager.rememberGlobalOrder(try names(manager))
+            try manager.add(name: "epsilon", config: stdio)
+            expectEqual(try names(manager), ["epsilon", "delta", "gamma", "alpha", "Beta"])
+        }
+    }
+
+    test("loadGlobal: an unreadable order file falls back to the added order") {
+        try withOrderHome { manager, paths in
+            try writeFile(paths.serverOrderFile, "not json")
+            expectEqual(try names(manager), ["Beta", "alpha", "gamma"])
         }
     }
 
@@ -60,8 +89,8 @@ func runServerOrderTests() {
     test("rename: a renamed server keeps its place") {
         try withOrderHome { manager, _ in
             try manager.saveGlobalOrder(["gamma", "alpha", "Beta"])
-            try manager.rename("gamma", to: "zeta")
-            expectEqual(try names(manager), ["zeta", "alpha", "Beta"])
+            try manager.rename("Beta", to: "zeta")
+            expectEqual(try names(manager), ["gamma", "alpha", "zeta"])
         }
     }
 

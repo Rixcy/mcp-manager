@@ -49,9 +49,9 @@ struct SettingsView: View {
 
     private var addingMCPs: some View {
         SettingRow(title: "Default transport",
-                   detail: "New MCPs start on this. It follows whichever transport you last added with.") {
+                   detail: "New MCPs start on this. It follows whichever of the two you last added with.") {
             Picker("Default transport", selection: $transport) {
-                ForEach(ServerEditorSheet.Kind.allCases) { Text($0.label).tag($0) }
+                ForEach([ServerEditorSheet.Kind.http, .stdio]) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()

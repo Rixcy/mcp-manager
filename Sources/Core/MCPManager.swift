@@ -36,11 +36,12 @@ public final class MCPManager: @unchecked Sendable {
         try orderStore.setGlobal(names)
     }
 
-    /// Saves `names` when they differ from the saved order. The order is cosmetic,
-    /// so a failed write leaves the list to be arranged again on the next load.
+    /// Pins servers the saved order does not list yet above it, in the order
+    /// `names` shows them. `names` can come from a read that predates the last
+    /// save, so it never replaces the saved order. The order is cosmetic, so a
+    /// failed write leaves the list to be arranged again on the next load.
     public func rememberGlobalOrder(_ names: [String]) {
-        guard (try? orderStore.global()) != names else { return }
-        try? orderStore.setGlobal(names)
+        try? orderStore.pinGlobal(names)
     }
 
     /// The list order is cosmetic, so failing to carry it over must not fail
@@ -86,6 +87,10 @@ public final class MCPManager: @unchecked Sendable {
             case .claude: try claudeStore.remove(name: name)
             case .codex: try codexStore.remove(name: name)
             }
+        }
+        // Gone from every client, its slot goes too: added again, it is new and goes on top.
+        if try MCPClient.allCases.allSatisfy({ try !names(in: $0).contains(name) }) {
+            try? orderStore.removeGlobal(name)
         }
         return WriteReport(written: holders)
     }

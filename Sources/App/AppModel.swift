@@ -37,6 +37,14 @@ final class AppModel: ObservableObject {
     /// The sidebar's project search replaces the Projects heading while open.
     @Published var isSearchingProjects = false
     @Published var projectQuery = ""
+    /// Bumped to move keyboard focus into the project search field.
+    @Published private(set) var projectSearchFocus = 0
+
+    func searchProjects() {
+        sidebarVisibility = .all
+        isSearchingProjects = true
+        projectSearchFocus += 1
+    }
 
     /// Live server pages by target key, kept while navigating so sessions survive page changes.
     @Published private(set) var inspectors: [String: InspectorModel] = [:]
@@ -113,26 +121,22 @@ final class AppModel: ObservableObject {
         await syncProjectInspectors()
     }
 
-    /// Reorders the global list while a row is dragged; `save` writes it once the drop lands.
-    func moveGlobal(_ name: String, onto target: String, save: Bool = true) {
+    func moveGlobal(_ name: String, onto target: String) {
         let names = ServerOrder.moving(name, onto: target, in: globals.map(\.name))
+        guard names != globals.map(\.name) else { return }
         let byName = Dictionary(globals.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         globals = names.compactMap { byName[$0] }
-        if save { saveGlobalOrder() }
+        do {
+            try manager.saveGlobalOrder(names)
+        } catch {
+            lastError = "Couldn't save the new order: \(Self.message(error))"
+        }
     }
 
     func moveGlobal(_ name: String, by offset: Int) {
         let names = globals.map(\.name)
         guard let index = names.firstIndex(of: name), names.indices.contains(index + offset) else { return }
         moveGlobal(name, onto: names[index + offset])
-    }
-
-    func saveGlobalOrder() {
-        do {
-            try manager.saveGlobalOrder(globals.map(\.name))
-        } catch {
-            lastError = "Couldn't save the new order: \(Self.message(error))"
-        }
     }
 
     func rankedProjects(_ query: String) -> [ProjectRef] {

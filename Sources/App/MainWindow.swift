@@ -237,12 +237,12 @@ private struct ProjectSearchHeader: View {
                 RoundedRectangle(cornerRadius: Theme.panelRadius)
                     .strokeBorder(focused ? Theme.green : Theme.border, lineWidth: 1)
             )
-            .onAppear { DispatchQueue.main.async { focused = true } }
+            .task(id: model.projectSearchFocus) { focused = true }
         } else {
             HStack {
                 SectionLabel("Projects")
                 Spacer()
-                Button { model.isSearchingProjects = true } label: {
+                Button { model.searchProjects() } label: {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Theme.mutedStrong)
@@ -250,7 +250,6 @@ private struct ProjectSearchHeader: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut("f", modifiers: .command)
                 .accessibilityLabel("Search projects")
                 .help("Search projects (⌘F)")
             }

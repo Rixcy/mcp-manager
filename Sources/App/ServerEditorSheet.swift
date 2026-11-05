@@ -357,7 +357,8 @@ struct ServerEditorSheet: View {
                     try await model.updateProjectEntry(entry, name: name, config: config)
                 } else {
                     try await model.add(name: name, config: config, to: targets)
-                    Preferences.newServerTransport = kind
+                    // SSE leaves Codex out, so it is never carried over to the next add unasked.
+                    if kind != .sse { Preferences.newServerTransport = kind }
                 }
                 dismiss()
             } catch {
