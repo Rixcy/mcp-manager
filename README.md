@@ -13,7 +13,7 @@ A macOS menu bar app that keeps your MCP servers in sync across **Claude Code** 
 curl -fsSL https://raw.githubusercontent.com/rixcy/mcp-manager/main/install.sh | bash
 ```
 
-Then open it with `mcp-manager open`, or from the menu bar.
+Then open it with `mcp-manager open`, or from the menu bar. While its window is open it is a regular app, with a Dock icon and Settings on ⌘,.
 
 **To update**, run the same command again (or `mcp-manager update`). It only rebuilds when there's something new.
 
@@ -21,7 +21,7 @@ Needs macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`). It 
 
 ## What it does
 
-- **Global MCPs:** add, edit and remove servers in Claude and Codex at once. A server only one of them has gets a **Sync** button.
+- **Global MCPs:** add, edit and remove servers in Claude and Codex at once. Newest are on top; drag to reorder. A server only one of them has gets a **Sync** button.
 - **Project MCPs:** search any project Claude or Codex knows about and edit its servers in the file they came from.
 - **MCP client:** open a server to connect, run its tools from a form or raw JSON, read its resources, prompts and logs. Works over stdio, HTTP and SSE, and handles OAuth sign-in.
 

@@ -6,6 +6,7 @@ enum Route: Hashable {
     case project(String)
     /// A server page, by `MCPServerTarget.key`.
     case server(String)
+    case settings
 }
 
 @MainActor
@@ -31,6 +32,19 @@ final class AppModel: ObservableObject {
     @Published var lastNotice: String? { didSet { announce(lastNotice) } }
     @Published private(set) var isWriting = false
     @Published var isAddingServer = false
+
+    @Published var sidebarVisibility: NavigationSplitViewVisibility = .all
+    /// The sidebar's project search replaces the Projects heading while open.
+    @Published var isSearchingProjects = false
+    @Published var projectQuery = ""
+    /// Bumped to move keyboard focus into the project search field.
+    @Published private(set) var projectSearchFocus = 0
+
+    func searchProjects() {
+        sidebarVisibility = .all
+        isSearchingProjects = true
+        projectSearchFocus += 1
+    }
 
     /// Live server pages by target key, kept while navigating so sessions survive page changes.
     @Published private(set) var inspectors: [String: InspectorModel] = [:]
@@ -85,7 +99,11 @@ final class AppModel: ObservableObject {
     func refresh() async {
         let manager = self.manager
         let (loaded, projects) = await Task.detached(priority: .userInitiated) {
-            (Result { try manager.loadGlobal() }, manager.projects())
+            let loaded = Result { try manager.loadGlobal() }
+            // Saving what is shown pins servers that just appeared on top, so a
+            // later addition lands above them instead of being sorted among them.
+            if case let .success(servers) = loaded { manager.rememberGlobalOrder(servers.map(\.name)) }
+            return (loaded, manager.projects())
         }.value
         switch loaded {
         case let .success(servers):
@@ -101,6 +119,24 @@ final class AppModel: ObservableObject {
             await loadEntries(for: project)
         }
         await syncProjectInspectors()
+    }
+
+    func moveGlobal(_ name: String, onto target: String) {
+        let names = ServerOrder.moving(name, onto: target, in: globals.map(\.name))
+        guard names != globals.map(\.name) else { return }
+        let byName = Dictionary(globals.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        globals = names.compactMap { byName[$0] }
+        do {
+            try manager.saveGlobalOrder(names)
+        } catch {
+            lastError = "Couldn't save the new order: \(Self.message(error))"
+        }
+    }
+
+    func moveGlobal(_ name: String, by offset: Int) {
+        let names = globals.map(\.name)
+        guard let index = names.firstIndex(of: name), names.indices.contains(index + offset) else { return }
+        moveGlobal(name, onto: names[index + offset])
     }
 
     func rankedProjects(_ query: String) -> [ProjectRef] {
@@ -187,7 +223,7 @@ final class AppModel: ObservableObject {
     func backLabel(for key: String) -> String {
         switch returnRoutes[key] ?? defaultReturnRoute(key) {
         case let .project(path): return (path as NSString).lastPathComponent
-        case .globals, .server: return "Global MCPs"
+        case .globals, .server, .settings: return "Global MCPs"
         }
     }
 

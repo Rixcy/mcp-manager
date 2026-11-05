@@ -2,18 +2,21 @@ import SwiftUI
 
 struct MainWindow: View {
     @EnvironmentObject private var model: AppModel
-    @State private var query = ""
+
+    private var isSidebarCollapsed: Bool { model.sidebarVisibility == .detailOnly }
 
     var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $model.sidebarVisibility) {
             sidebar
                 .navigationSplitViewColumnWidth(min: 240, ideal: 280, max: 360)
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // The detail toolbar holds no items, so the page header moves up
-                // into its band instead of sitting below an empty strip.
-                .ignoresSafeArea(.container, edges: .top)
+                // into its band instead of sitting below an empty strip. With the
+                // sidebar collapsed the traffic lights and sidebar button sit in
+                // that band, so the header stays below them.
+                .ignoresSafeArea(.container, edges: isSidebarCollapsed ? [] : .top)
                 .background(Theme.bg.ignoresSafeArea())
                 .toolbarBackground(.hidden, for: .windowToolbar)
         }
@@ -26,7 +29,7 @@ struct MainWindow: View {
     }
 
     private var sidebar: some View {
-        let ranked = model.rankedProjects(query)
+        let ranked = model.rankedProjects(model.projectQuery)
         let sharedNames = Dictionary(grouping: model.projects, by: \.name).filter { $0.value.count > 1 }.keys
         return List {
             Section {
@@ -63,12 +66,10 @@ struct MainWindow: View {
             }
 
             Section {
-                OrcTextField(label: "Search projects", placeholder: "Search projects", text: $query)
-                    .onSubmit { if let first = ranked.first { model.open(first) } }
                 if model.hasLoaded, model.projects.isEmpty {
                     FieldMessage(text: "No projects found in Claude or Codex config.", tone: .neutral)
                 } else if ranked.isEmpty {
-                    FieldMessage(text: "No project matches “\(query)”.", tone: .neutral)
+                    FieldMessage(text: "No project matches “\(model.projectQuery)”.", tone: .neutral)
                 }
                 ForEach(ranked) { project in
                     ProjectRow(project: project, showsFolder: sharedNames.contains(project.name))
@@ -76,15 +77,10 @@ struct MainWindow: View {
                         .sidebarRow(.project(project.path), selection: $model.route)
                 }
             } header: {
-                HStack {
-                    SectionLabel("Projects")
-                    Spacer()
-                    if model.hasLoaded {
-                        Text(query.isEmpty ? "\(model.projects.count)" : "\(ranked.count) of \(model.projects.count)")
-                            .font(Theme.label)
-                            .foregroundStyle(Theme.mutedStrong)
-                    }
-                }
+                // Section headers run closer to the sidebar edge than rows do; this
+                // lines the field and its icon up with the Global MCPs row above.
+                ProjectSearchHeader { if let first = ranked.first { model.open(first) } }
+                    .padding(.trailing, 8)
             }
         }
         .listStyle(.sidebar)
@@ -100,6 +96,36 @@ struct MainWindow: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
+            .background(Theme.panel)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                Hairline()
+                Button { model.route = .settings } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "gearshape")
+                            .foregroundStyle(Theme.mutedStrong)
+                            .frame(width: 16)
+                            .accessibilityHidden(true)
+                        Text("Settings")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Theme.heading)
+                        Spacer()
+                        Text("⌘,")
+                            .font(Theme.label)
+                            .foregroundStyle(Theme.muted)
+                            .accessibilityHidden(true)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(model.route == .settings ? Theme.chip : .clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityAddTraits(model.route == .settings ? .isSelected : [])
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+            }
             .background(Theme.panel)
         }
     }
@@ -124,6 +150,8 @@ struct MainWindow: View {
                 .padding(16)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
+        case .settings:
+            SettingsView()
         case .globals, nil:
             GlobalServersView()
         }
@@ -168,5 +196,68 @@ private struct ConnectionRow: View {
                 .truncationMode(.tail)
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// The Projects heading, which turns into the project search field when its magnifying glass is clicked.
+private struct ProjectSearchHeader: View {
+    @EnvironmentObject private var model: AppModel
+    let onSubmit: () -> Void
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        if model.isSearchingProjects {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Theme.mutedStrong)
+                    .accessibilityHidden(true)
+                TextField("Search projects", text: $model.projectQuery,
+                          prompt: Text("Search projects").foregroundColor(Theme.muted))
+                    .labelsHidden()
+                    .textFieldStyle(.plain)
+                    .font(Theme.body)
+                    .foregroundStyle(Theme.heading)
+                    .focused($focused)
+                    .onSubmit(onSubmit)
+                    .onExitCommand(perform: close)
+                Button(action: close) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Theme.muted)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close project search")
+                .help("Close search (Esc)")
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(RoundedRectangle(cornerRadius: Theme.panelRadius).fill(Theme.bg))
+            .overlay(
+                RoundedRectangle(cornerRadius: Theme.panelRadius)
+                    .strokeBorder(focused ? Theme.green : Theme.border, lineWidth: 1)
+            )
+            .task(id: model.projectSearchFocus) { focused = true }
+        } else {
+            HStack {
+                SectionLabel("Projects")
+                Spacer()
+                Button { model.searchProjects() } label: {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Theme.mutedStrong)
+                        .frame(width: 20, height: 18)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Search projects")
+                .help("Search projects (⌘F)")
+            }
+        }
+    }
+
+    private func close() {
+        model.projectQuery = ""
+        model.isSearchingProjects = false
     }
 }

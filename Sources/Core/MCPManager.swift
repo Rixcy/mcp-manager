@@ -16,16 +16,38 @@ public final class MCPManager: @unchecked Sendable {
     var codexStore: CodexConfigStore { CodexConfigStore(url: paths.codexTOML, io: fileIO) }
     var projectIndex: ProjectIndex { ProjectIndex(paths: paths, claude: claudeStore, codex: codexStore, io: fileIO) }
 
-    /// Global servers from both clients, merged by name, sorted case-insensitively.
+    var orderStore: ServerOrderStore { ServerOrderStore(url: paths.serverOrderFile) }
+
+    /// Global servers from both clients, merged by name, in the saved order with
+    /// servers it does not list yet on top. Before anything is saved, Codex's
+    /// file order (newest last) is the best record of when each was added.
     public func loadGlobal() throws -> [GlobalServer] {
         let claude = try claudeStore.servers()
         let codex = try codexStore.servers()
-        return Set(claude.keys).union(codex.keys)
+        let names = Set(claude.keys).union(codex.keys)
+        let saved = (try? orderStore.global()) ?? []
+        let fallback = try codexStore.serverNamesInFileOrder().reversed()
+        return ServerOrder.arrange(names, saved: saved, fallback: Array(fallback))
             .map { GlobalServer(name: $0, claude: claude[$0], codex: codex[$0]) }
-            .sorted { a, b in
-                let order = a.name.caseInsensitiveCompare(b.name)
-                return order == .orderedSame ? a.name < b.name : order == .orderedAscending
-            }
+    }
+
+    /// Saves the order the global list shows, top first.
+    public func saveGlobalOrder(_ names: [String]) throws {
+        try orderStore.setGlobal(names)
+    }
+
+    /// Pins servers the saved order does not list yet above it, in the order
+    /// `names` shows them. `names` can come from a read that predates the last
+    /// save, so it never replaces the saved order. The order is cosmetic, so a
+    /// failed write leaves the list to be arranged again on the next load.
+    public func rememberGlobalOrder(_ names: [String]) {
+        try? orderStore.pinGlobal(names)
+    }
+
+    /// The list order is cosmetic, so failing to carry it over must not fail
+    /// a rename that already reached the configs.
+    private func carryOrder(from oldName: String, to newName: String) {
+        try? orderStore.renameGlobal(oldName, to: newName)
     }
 
     /// Adds one server to each client in `clients`. Validates the name and checks
@@ -66,6 +88,10 @@ public final class MCPManager: @unchecked Sendable {
             case .codex: try codexStore.remove(name: name)
             }
         }
+        // Gone from every client, its slot goes too: added again, it is new and goes on top.
+        if try MCPClient.allCases.allSatisfy({ try !names(in: $0).contains(name) }) {
+            try? orderStore.removeGlobal(name)
+        }
         return WriteReport(written: holders)
     }
 
@@ -86,6 +112,7 @@ public final class MCPManager: @unchecked Sendable {
             case .codex: try codexStore.rename(oldName, to: newName)
             }
         }
+        carryOrder(from: oldName, to: newName)
         return WriteReport(written: holders)
     }
 
@@ -136,6 +163,7 @@ public final class MCPManager: @unchecked Sendable {
             }
             report.written.append(client)
         }
+        carryOrder(from: name, to: newName)
         return report
     }
 

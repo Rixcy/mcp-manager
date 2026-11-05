@@ -4,6 +4,7 @@ struct GlobalServersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var editing: GlobalServer?
     @State private var removing: GlobalServer?
+    @State private var dropTarget: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,7 +41,7 @@ struct GlobalServersView: View {
                 Text("Global MCPs")
                     .font(Theme.headline)
                     .foregroundStyle(Theme.heading)
-                Text("Every Claude and Codex session can use these.")
+                Text(model.globals.count > 1 ? "Every Claude and Codex session can use these. Drag to reorder." : "Every Claude and Codex session can use these.")
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.mutedStrong)
             }
@@ -68,6 +69,17 @@ struct GlobalServersView: View {
         } else {
             ServerList(items: model.globals) { server in
                 GlobalServerRow(server: server, onEdit: { editing = server }, onRemove: { removing = server })
+                    .background(dropTarget == server.name ? Theme.accent.opacity(0.12) : .clear)
+                    // The dragged name travels with the drop, so a cancelled drag leaves nothing behind.
+                    .draggable(server.name)
+                    .dropDestination(for: String.self) { names, _ in
+                        guard let name = names.first, name != server.name,
+                              model.globals.contains(where: { $0.name == name }) else { return false }
+                        withAnimation(.snappy(duration: 0.2)) { model.moveGlobal(name, onto: server.name) }
+                        return true
+                    } isTargeted: { targeted in
+                        if targeted { dropTarget = server.name } else if dropTarget == server.name { dropTarget = nil }
+                    }
             }
             filesNote
         }
@@ -149,6 +161,11 @@ private struct GlobalServerRow: View {
                 Button("Edit…", action: onEdit)
                     .disabled(model.isWriting)
                 Divider()
+                Button("Move Up") { model.moveGlobal(server.name, by: -1) }
+                    .disabled(model.globals.first?.name == server.name)
+                Button("Move Down") { model.moveGlobal(server.name, by: 1) }
+                    .disabled(model.globals.last?.name == server.name)
+                Divider()
                 Button("Remove…", role: .destructive, action: onRemove)
                     .disabled(model.isWriting)
             }
@@ -159,3 +176,4 @@ private struct GlobalServerRow: View {
         if let target { model.inspect(target) }
     }
 }
+
