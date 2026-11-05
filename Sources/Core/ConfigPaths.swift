@@ -31,6 +31,7 @@ public struct ConfigPaths: Equatable, Sendable {
 
     public var clientVariablesFile: URL { supportDir.appendingPathComponent("client-variables.json") }
     public var oauthCredentialsFile: URL { supportDir.appendingPathComponent("oauth-credentials.json") }
+    public var serverOrderFile: URL { supportDir.appendingPathComponent("server-order.json") }
 
     /// Real paths. `MCP_MANAGER_HOME` swaps in a fixture home (used for screenshots);
     /// `CODEX_HOME` is honoured like Codex itself does.

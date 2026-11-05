@@ -18,6 +18,17 @@ struct CodexConfigStore {
         return Self.servers(in: doc)
     }
 
+    /// Server names in the order their tables first appear in the file.
+    func serverNamesInFileOrder() throws -> [String] {
+        guard let doc = try readDocument() else { return [] }
+        var seen = Set<String>()
+        return doc.statements.compactMap { statement -> String? in
+            guard statement.path.count >= 2, statement.path[0] == "mcp_servers",
+                  seen.insert(statement.path[1]).inserted else { return nil }
+            return statement.path[1]
+        }
+    }
+
     /// Keys of the `[projects."…"]` tables.
     func projectKeys() throws -> [String] {
         guard let doc = try readDocument() else { return [] }

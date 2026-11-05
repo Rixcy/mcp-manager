@@ -19,16 +19,16 @@ private func backups(_ paths: ConfigPaths, _ basename: String) -> [String] {
 private let stdioConfig = MCPServerConfig(transport: .stdio(command: "/bin/tool", args: ["--flag"], env: ["K": "v"]))
 
 func runMCPManagerTests() {
-    test("loadGlobal: merges both clients by name, sorted case-insensitively") {
+    test("loadGlobal: merges both clients by name") {
         let claude = #"{"mcpServers": {"gamma": {"command": "/g"}, "Beta": {"type": "http", "url": "https://b"}}}"#
         let codex = "[mcp_servers.alpha]\ncommand = \"/a\"\n[mcp_servers.Beta]\nurl = \"https://b2\"\n"
         try withManager(claude: claude, codex: codex) { manager, _ in
-            let servers = try manager.loadGlobal()
-            expectEqual(servers.map(\.name), ["alpha", "Beta", "gamma"])
-            expectEqual(servers[1].claude?.transport, .http(url: "https://b", headers: [:]))
-            expectEqual(servers[1].codex?.transport, .http(url: "https://b2", headers: [:]))
-            expectEqual(servers[0].clients, [.codex])
-            expectEqual(servers[2].clients, [.claude])
+            let servers = Dictionary(uniqueKeysWithValues: try manager.loadGlobal().map { ($0.name, $0) })
+            expectEqual(servers.keys.sorted(), ["Beta", "alpha", "gamma"])
+            expectEqual(servers["Beta"]?.claude?.transport, .http(url: "https://b", headers: [:]))
+            expectEqual(servers["Beta"]?.codex?.transport, .http(url: "https://b2", headers: [:]))
+            expectEqual(servers["alpha"]?.clients, [.codex])
+            expectEqual(servers["gamma"]?.clients, [.claude])
         }
     }
 

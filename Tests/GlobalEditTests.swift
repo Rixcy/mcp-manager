@@ -63,7 +63,7 @@ func runGlobalEditTests() {
             try manager.updateGlobal("shared", to: "renamed", config: config)
 
             let names = try manager.loadGlobal().map(\.name)
-            expectEqual(names, ["other", "remote", "renamed", "taken"])
+            expectEqual(Set(names), ["other", "remote", "renamed", "taken"])
             expectEqual(try global(manager, "renamed").clients, [.claude, .codex])
         }
     }
