@@ -61,13 +61,18 @@ fetch_source() {
 make_icon() {
     local repo="$1" resources="$2" workdir="$3"
     local svg="$repo/assets/mcp-manager-icon.svg" png="$workdir/icon-1024.png"
+    local rendered="$repo/assets/mcp-manager-icon-1024.png"
     local rsvg
-    rsvg="$(command -v rsvg-convert || true)"
-    if [[ -n "$rsvg" ]]; then
-        "$rsvg" -w 1024 -h 1024 "$svg" -o "$png"
+    if [[ -f "$rendered" ]]; then
+        cp "$rendered" "$png"
     else
-        qlmanage -t -s 1024 -o "$workdir" "$svg" >/dev/null 2>&1 || true
-        [[ -f "$workdir/$(basename "$svg").png" ]] && mv "$workdir/$(basename "$svg").png" "$png"
+        rsvg="$(command -v rsvg-convert || true)"
+        if [[ -n "$rsvg" ]]; then
+            "$rsvg" -w 1024 -h 1024 "$svg" -o "$png"
+        else
+            qlmanage -t -s 1024 -o "$workdir" "$svg" >/dev/null 2>&1 || true
+            [[ -f "$workdir/$(basename "$svg").png" ]] && mv "$workdir/$(basename "$svg").png" "$png"
+        fi
     fi
     if [[ ! -f "$png" ]]; then
         echo "NOTE: no SVG renderer found; the app will use the default icon"

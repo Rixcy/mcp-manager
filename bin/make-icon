@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Builds Tools/Icon and regenerates assets/mcp-manager-icon-1024.png, the app
+# icon, from assets/orc-base-icon-1024.png. Renders offscreen; no window opens.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p .build
+swiftc -O -target "$(uname -m)-apple-macos14.0" Tools/Icon/main.swift -o .build/make-icon
+.build/make-icon assets/orc-base-icon-1024.png assets/mcp-manager-icon-1024.png
+echo "wrote assets/mcp-manager-icon-1024.png"
