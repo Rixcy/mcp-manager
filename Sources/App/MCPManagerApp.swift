@@ -5,6 +5,7 @@ let mainWindowID = "main"
 
 @main
 struct MCPManagerApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var model = AppModel()
 
     var body: some Scene {
@@ -23,6 +24,8 @@ struct MCPManagerApp: App {
                 .environmentObject(model)
                 .tint(Theme.accent)
                 .onOpenURL { _ in NSApp.activate(ignoringOtherApps: true) }
+                .onAppear { DesktopMode.enter() }
+                .onDisappear { DesktopMode.leave() }
         }
         // `mcp-manager open` sends mcp-manager://open; claiming it here opens
         // this window instead of a stray new scene.
@@ -32,19 +35,49 @@ struct MCPManagerApp: App {
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(replacing: .appSettings) {
-                OpenMainWindowCommand()
+                SettingsCommand(model: model)
             }
             CommandGroup(replacing: .newItem) {}
         }
     }
 }
 
-private struct OpenMainWindowCommand: View {
+/// The app lives in the menu bar, and becomes a regular app with a Dock icon,
+/// app menu and ⌘-Tab entry only while its window is open.
+@MainActor
+enum DesktopMode {
+    static func enter() {
+        NSApp.setActivationPolicy(.regular)
+        // The app menu only appears once the app is activated after the policy change.
+        DispatchQueue.main.async { NSApp.activate(ignoringOtherApps: true) }
+    }
+
+    static func leave() {
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// Opening the app again from Finder, Spotlight or Launchpad shows its window,
+    /// through the same URL `mcp-manager open` uses.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag, let url = URL(string: "mcp-manager://open") {
+            NSWorkspace.shared.open(url)
+        }
+        return true
+    }
+}
+
+private struct SettingsCommand: View {
+    @ObservedObject var model: AppModel
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("Open MCP Manager") { openWindow.mainWindow() }
-            .keyboardShortcut(",", modifiers: .command)
+        Button("Settings…") {
+            model.route = .settings
+            openWindow.mainWindow()
+        }
+        .keyboardShortcut(",", modifiers: .command)
     }
 }
 

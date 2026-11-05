@@ -5,6 +5,7 @@ struct MenuBarView: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
     @State private var query = ""
+    @State private var host = WeakWindow()
 
     private var matches: [ProjectRef] {
         query.trimmingCharacters(in: .whitespaces).isEmpty ? [] : Array(model.rankedProjects(query).prefix(5))
@@ -25,6 +26,7 @@ struct MenuBarView: View {
         }
         .frame(width: 360)
         .background(Theme.bg)
+        .background(WindowReader { host.window = $0 })
     }
 
     private var header: some View {
@@ -95,14 +97,19 @@ struct MenuBarView: View {
             Button("Add MCP…") {
                 model.route = .globals
                 model.isAddingServer = true
-                openWindow.mainWindow()
+                showMainWindow()
             }
             .buttonStyle(.orc(.primary, compact: true))
-            Button("Open MCP Manager") { openWindow.mainWindow() }
+            Button("Open MCP Manager") { showMainWindow() }
                 .buttonStyle(.orc(.secondary, compact: true))
-                .keyboardShortcut(",", modifiers: .command)
-                .help("Open MCP Manager (⌘,)")
+                .keyboardShortcut("o", modifiers: .command)
+                .help("Open MCP Manager (⌘O)")
             Spacer()
+            IconButton(systemImage: "gearshape", label: "Settings (⌘,)") {
+                model.route = .settings
+                showMainWindow()
+            }
+            .keyboardShortcut(",", modifiers: .command)
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.orc(.ghost, compact: true))
                 .keyboardShortcut("q", modifiers: .command)
@@ -116,12 +123,18 @@ struct MenuBarView: View {
     private func openServer(_ server: GlobalServer) {
         guard let target = MCPServerTarget.global(server) else { return }
         model.inspect(target)
-        openWindow.mainWindow()
+        showMainWindow()
     }
 
     private func open(_ project: ProjectRef) {
         model.open(project)
         query = ""
+        showMainWindow()
+    }
+
+    /// Closes this menu bar window first, so it does not stay open over the app window.
+    private func showMainWindow() {
+        host.window?.close()
         openWindow.mainWindow()
     }
 }
@@ -184,5 +197,24 @@ struct HoverRowStyle: ButtonStyle {
                 .contentShape(Rectangle())
                 .onHover { hovering = $0 }
         }
+    }
+}
+
+final class WeakWindow {
+    weak var window: NSWindow?
+}
+
+/// Reports the window a view is in once it is attached to one.
+struct WindowReader: NSViewRepresentable {
+    let onWindow: (NSWindow?) -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { onWindow(view.window) }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { onWindow(view.window) }
     }
 }

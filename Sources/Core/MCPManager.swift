@@ -36,6 +36,13 @@ public final class MCPManager: @unchecked Sendable {
         try orderStore.setGlobal(names)
     }
 
+    /// Saves `names` when they differ from the saved order. The order is cosmetic,
+    /// so a failed write leaves the list to be arranged again on the next load.
+    public func rememberGlobalOrder(_ names: [String]) {
+        guard (try? orderStore.global()) != names else { return }
+        try? orderStore.setGlobal(names)
+    }
+
     /// The list order is cosmetic, so failing to carry it over must not fail
     /// a rename that already reached the configs.
     private func carryOrder(from oldName: String, to newName: String) {

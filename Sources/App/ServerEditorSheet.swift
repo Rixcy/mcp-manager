@@ -4,8 +4,9 @@ struct ServerEditorSheet: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.dismiss) private var dismiss
 
+    /// HTTP leads: most hosted MCPs use it.
     enum Kind: String, CaseIterable, Identifiable {
-        case stdio, http, sse
+        case http, stdio, sse
         var id: String { rawValue }
         var label: String {
             switch self {
@@ -17,7 +18,7 @@ struct ServerEditorSheet: View {
     }
 
     @State private var name = ""
-    @State private var kind: Kind = .stdio
+    @State private var kind: Kind
     @State private var command = ""
     @State private var argsText = ""
     @State private var envRows: [KeyValueRow] = []
@@ -40,6 +41,7 @@ struct ServerEditorSheet: View {
     init(editing: MCPEntry? = nil, editingGlobal: GlobalServer? = nil) {
         self.editing = editing
         self.editingGlobal = editingGlobal
+        _kind = State(initialValue: Preferences.newServerTransport)
         if let entry = editing {
             prefill(name: entry.name, config: entry.config)
         } else if let server = editingGlobal, let config = server.primaryConfig {
@@ -67,7 +69,7 @@ struct ServerEditorSheet: View {
 
     /// Codex has no SSE transport, so a server Codex holds can't switch to it.
     private var kinds: [Kind] {
-        editing?.client == .codex || editingGlobal?.codex != nil ? [.stdio, .http] : Kind.allCases
+        editing?.client == .codex || editingGlobal?.codex != nil ? [.http, .stdio] : Kind.allCases
     }
 
     private var targets: Set<MCPClient> {
@@ -344,6 +346,7 @@ struct ServerEditorSheet: View {
         let targets = self.targets
         let editing = self.editing
         let editingGlobal = self.editingGlobal
+        let kind = self.kind
         Task {
             do {
                 if let server = editingGlobal {
@@ -354,6 +357,7 @@ struct ServerEditorSheet: View {
                     try await model.updateProjectEntry(entry, name: name, config: config)
                 } else {
                     try await model.add(name: name, config: config, to: targets)
+                    Preferences.newServerTransport = kind
                 }
                 dismiss()
             } catch {

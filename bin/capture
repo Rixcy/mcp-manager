@@ -8,7 +8,7 @@ usage() {
     cat <<EOF
 usage: bin/capture <out-dir> [scene...]
 
-scenes: globals, project, server (default: all three)
+scenes: globals, project, server, settings, collapsed, search (default: globals, project, server)
 env:
   CAPTURE_APPEARANCE  light, dark or light,dark (default: light,dark)
   MCP_MANAGER_HOME    fixture home to read (default: a fresh bin/fixture-home)

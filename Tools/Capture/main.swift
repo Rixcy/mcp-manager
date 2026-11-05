@@ -6,7 +6,7 @@ import SwiftUI
 let usage = "usage: capture <fixture-home> <out-dir> <light,dark> <scene>... (scenes: \(CaptureScene.allCases.map(\.rawValue).joined(separator: ", ")))"
 
 enum CaptureScene: String, CaseIterable {
-    case globals, project, server
+    case globals, project, server, settings, collapsed, search
 }
 
 struct CaptureFailure: Error, CustomStringConvertible {
@@ -96,9 +96,21 @@ final class Capture {
     }
 
     private func show(_ scene: CaptureScene) async throws {
+        model.sidebarVisibility = .all
+        model.isSearchingProjects = false
+        model.projectQuery = ""
         switch scene {
         case .globals:
             model.route = .globals
+        case .settings:
+            model.route = .settings
+        case .collapsed:
+            model.route = .globals
+            model.sidebarVisibility = .detailOnly
+        case .search:
+            model.route = .globals
+            model.isSearchingProjects = true
+            model.projectQuery = "re"
         case .project:
             guard let reels = model.projects.first(where: { $0.path.hasSuffix("/Projects/reels") }) else {
                 throw CaptureFailure(description: "the fixture home has no reels project")
