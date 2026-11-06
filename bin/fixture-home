@@ -4,6 +4,8 @@
 set -euo pipefail
 
 HOME_DIR="${1:?usage: bin/fixture-home <dir>}"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+DEMO_SERVER="$REPO/Tests/Fixtures/mcp_fixture_server.py"
 mkdir -p "$HOME_DIR/.codex" "$HOME_DIR/Projects/reels/.codex" "$HOME_DIR/Projects/rails" "$HOME_DIR/Projects/my-reels-app" "$HOME_DIR/Projects/dotfiles"
 P="$HOME_DIR/Projects"
 
@@ -14,7 +16,8 @@ cat > "$HOME_DIR/.claude.json" <<JSON
     "linear": { "type": "http", "url": "https://mcp.linear.app/mcp" },
     "notion": { "type": "http", "url": "https://mcp.notion.com/mcp" },
     "orc": { "type": "stdio", "command": "/usr/local/bin/orc-mcp", "args": ["--stdio"], "env": {} },
-    "granola": { "type": "http", "url": "https://mcp.granola.ai/mcp" }
+    "granola": { "type": "http", "url": "https://mcp.granola.ai/mcp" },
+    "demo": { "type": "stdio", "command": "/usr/bin/python3", "args": ["$DEMO_SERVER", "--stdio"], "env": {} }
   },
   "projects": {
     "$P/reels": { "mcpServers": { "figma-desktop": { "type": "http", "url": "http://127.0.0.1:3845/mcp" } } },
@@ -38,12 +41,19 @@ args = ["--stdio"]
 [mcp_servers.datadog]
 url = "https://mcp.datadoghq.eu/v1/mcp"
 
+[mcp_servers.demo]
+command = "/usr/bin/python3"
+args = ["$DEMO_SERVER", "--stdio"]
+
 [projects."$P/reels"]
 trust_level = "trusted"
 TOML
 
 cat > "$P/reels/.mcp.json" <<JSON
-{ "mcpServers": { "playwright": { "command": "npx", "args": ["@playwright/mcp@latest"] } } }
+{ "mcpServers": {
+  "playwright": { "command": "npx", "args": ["@playwright/mcp@latest"] },
+  "search": { "command": "reels-search-mcp", "args": ["--stdio"], "env": { "SEARCH_API_KEY": "\${REELS_SEARCH_KEY}" } }
+} }
 JSON
 
 cat > "$P/reels/.codex/config.toml" <<TOML
