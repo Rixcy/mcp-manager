@@ -71,11 +71,14 @@ final class FixtureServer {
         self.port = port
     }
 
+    /// Polls instead of `waitUntilExit()`, which can wait forever when called
+    /// from a `testAsync` body on the cooperative pool.
     func stop() {
-        if process.isRunning {
-            process.terminate()
-            process.waitUntilExit()
-        }
+        guard process.isRunning else { return }
+        process.terminate()
+        let deadline = Date().addingTimeInterval(2)
+        while process.isRunning, Date() < deadline { usleep(10_000) }
+        if process.isRunning { kill(process.processIdentifier, SIGKILL) }
     }
 
     deinit { stop() }
