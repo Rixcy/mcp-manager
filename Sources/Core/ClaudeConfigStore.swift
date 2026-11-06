@@ -134,11 +134,17 @@ struct ClaudeConfigStore {
                 headers.removeValue(forKey: key)
             }
             let transport: MCPTransport = type == "sse" ? .sse(url: url, headers: headers) : .http(url: url, headers: headers)
-            return MCPServerConfig(transport: transport, bearerTokenEnvVar: bearer)
+            return MCPServerConfig(transport: transport, bearerTokenEnvVar: bearer, oauth: oauthHints(entry["oauth"]))
         }
         guard let command = entry["command"] as? String else { return nil }
         let args = (entry["args"] as? [Any])?.compactMap { $0 as? String } ?? []
         return MCPServerConfig(transport: .stdio(command: command, args: args, env: stringMap(entry["env"])))
+    }
+
+    static func oauthHints(_ value: Any?) -> MCPOAuthHints? {
+        guard let block = value as? [String: Any] else { return nil }
+        let hints = MCPOAuthHints(clientID: block["clientId"] as? String, callbackPort: (block["callbackPort"] as? NSNumber)?.intValue)
+        return hints.clientID == nil && hints.callbackPort == nil ? nil : hints
     }
 
     /// `VAR` from a header value of exactly `Bearer ${VAR}`.

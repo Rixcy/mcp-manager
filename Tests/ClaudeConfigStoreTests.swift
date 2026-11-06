@@ -49,7 +49,8 @@ func runClaudeConfigStoreTests() {
             let servers = try store.servers()
             expectEqual(servers["legacy"], MCPServerConfig(transport: .stdio(command: "/usr/bin/legacy", args: ["a"], env: ["PORT": "8080"])))
             expectEqual(servers["events"], MCPServerConfig(transport: .sse(url: "https://e.example/sse", headers: ["X-A": "1"])))
-            expectEqual(servers["figma"], MCPServerConfig(transport: .http(url: "https://mcp.figma.com/mcp", headers: [:])))
+            expectEqual(servers["figma"], MCPServerConfig(transport: .http(url: "https://mcp.figma.com/mcp", headers: [:]),
+                                                         oauth: MCPOAuthHints(clientID: "abc123", callbackPort: 8765)))
             expectEqual(servers["authed"], MCPServerConfig(
                 transport: .http(url: "https://a.example/mcp", headers: ["X-B": "2"]), bearerTokenEnvVar: "A_TOKEN"))
             expectEqual(servers["literal-auth"], MCPServerConfig(

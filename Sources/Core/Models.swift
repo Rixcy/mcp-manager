@@ -46,11 +46,26 @@ public struct MCPServerConfig: Equatable, Hashable, Sendable {
     public var bearerTokenEnvVar: String?
     /// Codex `enabled = false` reads as disabled; Claude entries are always enabled.
     public var enabled: Bool
+    /// Claude's `oauth` block. Read for sign-in only: writes leave the file's own block in place.
+    public var oauth: MCPOAuthHints?
 
-    public init(transport: MCPTransport, bearerTokenEnvVar: String? = nil, enabled: Bool = true) {
+    public init(transport: MCPTransport, bearerTokenEnvVar: String? = nil, enabled: Bool = true, oauth: MCPOAuthHints? = nil) {
         self.transport = transport
         self.bearerTokenEnvVar = bearerTokenEnvVar
         self.enabled = enabled
+        self.oauth = oauth
+    }
+}
+
+/// A pre-registered OAuth client for servers without dynamic client registration.
+public struct MCPOAuthHints: Equatable, Hashable, Sendable {
+    public var clientID: String?
+    /// The redirect is `http://localhost:<port>/callback`, as Claude Code registers it.
+    public var callbackPort: Int?
+
+    public init(clientID: String? = nil, callbackPort: Int? = nil) {
+        self.clientID = clientID
+        self.callbackPort = callbackPort
     }
 }
 

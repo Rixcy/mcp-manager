@@ -112,7 +112,9 @@ func runProjectEditTests() {
             expectEqual(db["url"] as? String, "https://db2/mcp")
             expectEqual((db["headers"] as? [String: String])?["Authorization"], "Bearer ${DB_TOKEN}")
             expectEqual((db["oauth"] as? [String: String])?["clientId"], "abc")
-            expectEqual(try f.entry("db").config, config)
+            var reread = config
+            reread.oauth = MCPOAuthHints(clientID: "abc")
+            expectEqual(try f.entry("db").config, reread)
         }
     }
 
