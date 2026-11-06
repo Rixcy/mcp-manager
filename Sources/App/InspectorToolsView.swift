@@ -118,6 +118,7 @@ struct ToolAnnotationChips: View {
 private struct ToolDetail: View {
     @ObservedObject var inspector: InspectorModel
     let tool: MCPTool
+    @State private var confirmingRun = false
 
     private var schema: ToolSchema { ToolSchema(inputSchema: tool.inputSchema) }
     private var isDestructive: Bool { tool.annotations.destructiveHint == true && tool.annotations.readOnlyHint != true }
@@ -173,11 +174,19 @@ private struct ToolDetail: View {
             }
         } else {
             HStack(spacing: 10) {
-                Button(isDestructive ? "Run destructive tool" : "Run") { inspector.runSelectedTool() }
-                    .buttonStyle(.orc(isDestructive ? .destructive : .primary))
-                    .keyboardShortcut(.return, modifiers: .command)
-                    .disabled(inspector.activeCall != nil || !inspector.isConnected)
-                    .help("Run \(tool.name) (⌘↩)")
+                Button(isDestructive ? "Run destructive tool…" : "Run") {
+                    if isDestructive { confirmingRun = true } else { inspector.runSelectedTool() }
+                }
+                .buttonStyle(.orc(isDestructive ? .destructive : .primary))
+                .keyboardShortcut(.return, modifiers: .command)
+                .disabled(inspector.activeCall != nil || !inspector.isConnected)
+                .help("Run \(tool.name) (⌘↩)")
+                .confirmationDialog("Run \(tool.displayTitle)?", isPresented: $confirmingRun, titleVisibility: .visible) {
+                    Button("Run", role: .destructive) { inspector.runSelectedTool() }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("\(inspector.target.name) marks this tool as destructive: it may change or delete data.")
+                }
                 if isDestructive {
                     FieldMessage(text: "The server marks this tool as destructive: it may change or delete data.", tone: .red)
                 } else if inspector.activeCall != nil {

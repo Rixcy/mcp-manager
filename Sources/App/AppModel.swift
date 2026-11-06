@@ -275,7 +275,9 @@ final class AppModel: ObservableObject {
     }
 
     func rename(_ oldName: String, to newName: String) async throws {
+        let old = globals.first { $0.name == oldName }.flatMap(MCPServerTarget.global)
         let report = try await write { try $0.rename(oldName, to: newName) }
+        if let old { carryVariables(of: old, to: newName) }
         lastNotice = Self.describe(report, done: "Renamed \(oldName) to \(newName) in", nothing: "\(oldName) was not renamed.")
     }
 
@@ -300,13 +302,27 @@ final class AppModel: ObservableObject {
     /// Throws so the editor sheet can show the failure inline.
     func updateProjectEntry(_ entry: MCPEntry, name: String, config: MCPServerConfig) async throws {
         _ = try await write { try $0.updateProjectEntry(entry, name: name, config: config); return WriteReport(written: [entry.client]) }
+        carryVariables(of: .project(entry), to: name)
         lastNotice = "Saved \(name) in \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))."
     }
 
     /// Throws so the editor sheet can show the failure inline.
-    func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig) async throws {
-        let report = try await write { try $0.updateGlobal(name, to: newName, config: config) }
+    func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig,
+                      editedFrom original: MCPServerConfig?) async throws {
+        let old = globals.first { $0.name == name }.flatMap(MCPServerTarget.global)
+        let report = try await write { try $0.updateGlobal(name, to: newName, config: config, editedFrom: original) }
+        if let old { carryVariables(of: old, to: newName) }
         lastNotice = Self.describe(report, done: "Saved \(newName) in", nothing: "\(name) was not changed.")
+    }
+
+    /// Variables are filed under the server's key, which contains its name.
+    private func carryVariables(of old: MCPServerTarget, to newName: String) {
+        guard old.name != newName else { return }
+        do {
+            try ClientVariableStore(url: paths.clientVariablesFile).moveVariables(from: old.key, to: old.renamed(newName).key)
+        } catch {
+            lastError = "Renamed, but its MCP Manager variables stayed under the old name: \(Self.message(error))"
+        }
     }
 
     func sync(_ name: String) async {

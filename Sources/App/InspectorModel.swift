@@ -298,6 +298,8 @@ final class InspectorModel: ObservableObject, Identifiable {
 
     func connect() {
         guard !isBusy else { return }
+        // The Missing warning and the resolved command line already count unsaved rows.
+        if variablesDirty, variableIssues.isEmpty { saveVariables() }
         generation += 1
         let current = generation
         connectTask = Task { await runConnect(generation: current) }
@@ -314,6 +316,7 @@ final class InspectorModel: ObservableObject, Identifiable {
         signInTask?.cancel()
         activeCall?.task.cancel()
         activeCall = nil
+        catalogError = nil
         stopSession()
         state = .notConnected
         configChanged = false
@@ -334,6 +337,7 @@ final class InspectorModel: ObservableObject, Identifiable {
     private func runConnect(generation current: Int) async {
         stopSession()
         configChanged = false
+        let launchTarget = target
         catalogError = nil
         pingResult = .idle
         state = .connecting(.readingShell)
@@ -343,7 +347,7 @@ final class InspectorModel: ObservableObject, Identifiable {
         let launch: ResolvedLaunch
         do {
             let variables = try variableStore.variables(for: key)
-            launch = try LaunchResolver.resolve(target, shell: shell, variables: variables, homeDirectory: paths.home.path)
+            launch = try LaunchResolver.resolve(launchTarget, shell: shell, variables: variables, homeDirectory: paths.home.path)
         } catch {
             fail(error)
             return
@@ -365,6 +369,7 @@ final class InspectorModel: ObservableObject, Identifiable {
             await loadCatalog(result.capabilities, session: session, generation: current)
             guard current == generation else { return }
             state = .connected(result)
+            configChanged = target.config != launchTarget.config
             refreshCredential()
         } catch {
             guard current == generation else { return }
@@ -386,11 +391,11 @@ final class InspectorModel: ObservableObject, Identifiable {
     private func handle(_ event: MCPSessionEvent, session: MCPClientSession, generation current: Int) async {
         switch event {
         case .toolsChanged:
-            await refreshTools(session)
+            await refreshTools(session, generation: current)
         case .resourcesChanged:
-            await refreshResources(session)
+            await refreshResources(session, generation: current)
         case .promptsChanged:
-            await refreshPrompts(session)
+            await refreshPrompts(session, generation: current)
         case let .closed(error):
             guard current == generation else { return }
             generation += 1
@@ -505,41 +510,54 @@ final class InspectorModel: ObservableObject, Identifiable {
         resources = []
         templates = []
         prompts = []
-        if capabilities.tools { await refreshTools(session) }
+        if capabilities.tools { await refreshTools(session, generation: current) }
         guard current == generation else { return }
-        if capabilities.resources { await refreshResources(session) }
+        if capabilities.resources { await refreshResources(session, generation: current) }
         guard current == generation else { return }
-        if capabilities.prompts { await refreshPrompts(session) }
+        if capabilities.prompts { await refreshPrompts(session, generation: current) }
         if !capabilities.tools, tab == .tools {
             tab = capabilities.resources ? .resources : (capabilities.prompts ? .prompts : .info)
         }
     }
 
-    private func refreshTools(_ session: MCPClientSession) async {
+    private func refreshTools(_ session: MCPClientSession, generation current: Int) async {
         do {
-            tools = try await session.listTools()
+            let listed = try await session.listTools()
+            guard current == generation else { return }
+            tools = listed
             if let selected = selectedToolName, !tools.contains(where: { $0.name == selected }) { selectedToolName = nil }
             if selectedToolName == nil { selectedToolName = tools.first?.name }
         } catch {
-            catalogError = HelpfulError(error)
+            reportCatalogError(error, generation: current)
         }
     }
 
-    private func refreshResources(_ session: MCPClientSession) async {
+    private func refreshResources(_ session: MCPClientSession, generation current: Int) async {
         do {
-            resources = try await session.listResources()
-            templates = (try? await session.listResourceTemplates()) ?? []
+            let listed = try await session.listResources()
+            let listedTemplates = (try? await session.listResourceTemplates()) ?? []
+            guard current == generation else { return }
+            resources = listed
+            templates = listedTemplates
         } catch {
-            catalogError = HelpfulError(error)
+            reportCatalogError(error, generation: current)
         }
     }
 
-    private func refreshPrompts(_ session: MCPClientSession) async {
+    private func refreshPrompts(_ session: MCPClientSession, generation current: Int) async {
         do {
-            prompts = try await session.listPrompts()
+            let listed = try await session.listPrompts()
+            guard current == generation else { return }
+            prompts = listed
         } catch {
-            catalogError = HelpfulError(error)
+            reportCatalogError(error, generation: current)
         }
+    }
+
+    /// A load that the user cancelled, or that belongs to an older connection, is not an error to show.
+    private func reportCatalogError(_ error: Error, generation current: Int) {
+        guard current == generation, (error as? MCPClientError) != .cancelled, !(error is CancellationError) else { return }
+        catalogError = HelpfulError(error)
     }
 
     func dismissCatalogError() {
@@ -594,14 +612,19 @@ final class InspectorModel: ObservableObject, Identifiable {
         let schema = ToolSchema(inputSchema: tool.inputSchema)
         switch mode {
         case .json:
-            if case let .success(arguments) = schema.arguments(from: draft.values) {
+            switch schema.arguments(from: draft.values) {
+            case let .success(arguments):
                 var merged = arguments
                 if case let .success(previous) = ToolSchema.arguments(fromJSON: draft.json) {
                     for name in schema.unknownNames(in: previous) { merged[name] = previous[name] }
                 }
                 draft.json = JSONValue.object(merged).jsonString(pretty: true)
+                draft.errors = [:]
+            case let .failure(errors):
+                draft.errors = errors.messages
+                drafts[tool.name] = draft
+                return
             }
-            draft.errors = [:]
         case .form:
             switch ToolSchema.arguments(fromJSON: draft.json) {
             case let .success(arguments):

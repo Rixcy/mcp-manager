@@ -32,8 +32,10 @@ public struct ToolSchema: Equatable, Sendable {
         public var label: String { title ?? name }
 
         /// The text a choice option is shown and typed as.
+        /// An empty-string option reads `""` so it stays distinct from an unset field, whose text is empty.
         public static func optionText(_ option: JSONValue) -> String {
-            option.stringValue ?? option.jsonString()
+            if option == .string("") { return "\"\"" }
+            return option.stringValue ?? option.jsonString()
         }
 
         /// Placeholder hint: the default, else a short description of the expected input.

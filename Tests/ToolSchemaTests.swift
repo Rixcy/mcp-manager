@@ -220,4 +220,13 @@ func runToolSchemaTests() {
         expectTrue(errors(ToolSchema.arguments(fromJSON: "{")).first?.value.hasPrefix("Not valid JSON") == true,
                    "broken JSON should say so")
     }
+
+    test("ToolSchema: an empty-string enum option can be sent and differs from unset") {
+        let schema = ToolSchema(inputSchema: ["type": "object", "properties": ["order": ["enum": ["", "asc"]]]])
+        let empty = ToolSchema.Field.optionText("")
+        expectTrue(!empty.isEmpty, "the empty option needs visible text")
+        expectEqual(try schema.arguments(from: ["order": empty]).get(), ["order": ""])
+        expectEqual(try schema.arguments(from: ["order": ""]).get(), [:])
+        expectEqual(schema.values(from: ["order": ""])["order"], empty)
+    }
 }

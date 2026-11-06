@@ -93,7 +93,11 @@ public final class MCPManager: @unchecked Sendable {
     /// client that has it. Each client keeps its own `enabled` value and the keys
     /// MCP Manager does not model. Everything is checked before anything is written.
     @discardableResult
-    public func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig) throws -> WriteReport {
+    /// `editedFrom` is the config the editor started from. A client whose own settings
+    /// differ from it only takes the new name, so saving Claude's copy never overwrites
+    /// different settings that Codex keeps for the same server.
+    public func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig,
+                             editedFrom original: MCPServerConfig? = nil) throws -> WriteReport {
         if Self.validateName(newName) != nil { throw MCPManagerError.invalidName(newName) }
         let holders = try MCPClient.allCases.filter { try names(in: $0).contains(name) }
         guard !holders.isEmpty else { throw MCPManagerError.notFound(name: name) }
@@ -102,19 +106,37 @@ public final class MCPManager: @unchecked Sendable {
                 throw MCPManagerError.nameTaken(name: newName, client: client)
             }
         }
-        if holders.contains(.codex), case .sse = config.transport {
+        let current = try loadGlobal().first { $0.name == name }
+        let differing = holders.filter { client in
+            guard let original, let own = current?.config(for: client) else { return false }
+            return own.transport != original.transport || own.bearerTokenEnvVar != original.bearerTokenEnvVar
+        }
+        if holders.contains(.codex), !differing.contains(.codex), case .sse = config.transport {
             throw MCPManagerError.io(path: paths.codexTOML.path, detail: CodexConfigStore.sseSkipReason)
         }
-        let current = try loadGlobal().first { $0.name == name }
+        var report = WriteReport()
         for client in holders {
+            if differing.contains(client) {
+                if newName != name {
+                    switch client {
+                    case .claude: try claudeStore.rename(name, to: newName)
+                    case .codex: try codexStore.rename(name, to: newName)
+                    }
+                    report.written.append(client)
+                }
+                let kept = newName != name ? "only its name changed" : "it was left unchanged"
+                report.skipped.append(.init(client: client, reason: "\(client.displayName) has different settings for this MCP, so \(kept)"))
+                continue
+            }
             var own = config
             own.enabled = current?.config(for: client)?.enabled ?? true
             switch client {
             case .claude: try claudeStore.update(name: name, to: newName, config: own)
             case .codex: try codexStore.update(name: name, to: newName, config: own)
             }
+            report.written.append(client)
         }
-        return WriteReport(written: holders)
+        return report
     }
 
     /// Copies a server that exists in one client into the clients missing it.

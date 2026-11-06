@@ -133,4 +133,23 @@ func runGlobalEditTests() {
             expectEqual(backupNames(paths), [])
         }
     }
+
+    test("updateGlobal: a client whose settings differ from the edited copy only takes the new name") {
+        try withTempHome { home in
+            let paths = ConfigPaths(home: home)
+            try writeFile(paths.claudeJSON, editClaudeJSON)
+            try writeFile(paths.codexTOML, editCodexTOML.replacingOccurrences(of: #"args = ["--a"]"#, with: #"args = ["--codex-only"]"#))
+            let manager = MCPManager(paths: paths)
+            let original = try require(try global(manager, "shared").claude, "Claude copy missing")
+            let edited = MCPServerConfig(transport: .stdio(command: "/bin/new", args: ["--a"], env: ["K": "1"]))
+
+            let report = try manager.updateGlobal("shared", to: "renamed", config: edited, editedFrom: original)
+
+            expectEqual(report.written, [.claude, .codex])
+            expectEqual(report.skipped.map(\.client), [.codex])
+            let server = try global(manager, "renamed")
+            expectEqual(server.claude?.transport, edited.transport)
+            expectEqual(server.codex?.transport, .stdio(command: "/bin/old", args: ["--codex-only"], env: ["K": "1"]))
+        }
+    }
 }

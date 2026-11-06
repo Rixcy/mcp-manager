@@ -28,6 +28,10 @@ public struct MCPServerTarget: Identifiable, Hashable, Sendable {
         MCPServerTarget(name: entry.name, config: entry.config, origin: .project(entry))
     }
 
+    public func renamed(_ newName: String) -> MCPServerTarget {
+        MCPServerTarget(name: newName, config: config, origin: origin)
+    }
+
     /// Stable across launches; keys variables, logs and live sessions.
     public var key: String {
         switch origin {

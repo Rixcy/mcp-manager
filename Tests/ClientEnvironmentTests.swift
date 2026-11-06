@@ -357,6 +357,22 @@ private func runClientVariableStoreTests() {
         }
     }
 
+    test("variable store: a renamed server's variables move to its new key") {
+        try withTempHome { home in
+            let store = ClientVariableStore(url: home.appendingPathComponent("variables.json"))
+            let config = MCPServerConfig(transport: .stdio(command: "npx", args: [], env: [:]))
+            let old = MCPServerTarget(name: "linear", config: config, origin: .global(clients: [.claude]))
+            try store.setVariables([ClientVariable(name: "LINEAR_API_KEY", value: "lin_1")], for: old.key)
+            try store.setVariables([ClientVariable(name: "X", value: "1")], for: "project/x")
+
+            try store.moveVariables(from: old.key, to: old.renamed("linear-prod").key)
+
+            expectEqual(try store.variables(for: "global/linear-prod").map(\.value), ["lin_1"])
+            expectEqual(try store.variables(for: old.key), [])
+            expectEqual(try store.variables(for: "project/x").map(\.name), ["X"])
+        }
+    }
+
     test("variable store: a corrupt file is a parse error, not an empty list") {
         try withTempHome { home in
             let url = home.appendingPathComponent("variables.json")

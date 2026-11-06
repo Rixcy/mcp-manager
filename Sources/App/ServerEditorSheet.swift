@@ -287,6 +287,10 @@ struct ServerEditorSheet: View {
             return "Saved to \(abbreviate(URL(fileURLWithPath: entry.sourcePath))) · \(entry.scope.label)"
         }
         if let server = editingGlobal {
+            if let claude = server.claude, let codex = server.codex,
+               claude.transport != codex.transport || claude.bearerTokenEnvVar != codex.bearerTokenEnvVar {
+                return "Codex has different settings for this MCP. Saving changes Claude's copy; Codex only takes a new name."
+            }
             let files = server.clients.map { abbreviate($0 == .claude ? model.paths.claudeJSON : model.paths.codexTOML) }
             return "Saved to \(files.joined(separator: " and ")). Settings MCP Manager doesn't show are kept."
         }
@@ -343,7 +347,7 @@ struct ServerEditorSheet: View {
         Task {
             do {
                 if let server = editingGlobal {
-                    try await model.updateGlobal(server.name, to: name, config: config)
+                    try await model.updateGlobal(server.name, to: name, config: config, editedFrom: server.primaryConfig)
                 } else if let entry = editing {
                     // The sheet has no enabled toggle; keep whatever the file had.
                     config.enabled = entry.config.enabled

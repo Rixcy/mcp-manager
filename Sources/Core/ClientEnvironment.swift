@@ -388,6 +388,21 @@ public struct ClientVariableStore: Sendable {
         defer { Self.lock.unlock() }
         var all = try readAll()
         all[key] = variables.isEmpty ? nil : variables
+        try write(all)
+    }
+
+    /// Files `oldKey`'s variables under `newKey`, since a server's key contains its name.
+    public func moveVariables(from oldKey: String, to newKey: String) throws {
+        guard oldKey != newKey else { return }
+        Self.lock.lock()
+        defer { Self.lock.unlock() }
+        var all = try readAll()
+        guard let moving = all.removeValue(forKey: oldKey) else { return }
+        all[newKey] = moving
+        try write(all)
+    }
+
+    private func write(_ all: [String: [ClientVariable]]) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data: Data
