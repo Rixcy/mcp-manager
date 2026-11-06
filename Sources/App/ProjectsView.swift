@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProjectRow: View {
     let project: ProjectRef
+    /// The parent folder tells apart projects with the same name; elsewhere it repeats.
+    var showsFolder = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
@@ -9,12 +11,15 @@ struct ProjectRow: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Theme.heading)
                 .lineLimit(1)
-            Text(project.displayPath)
-                .font(.system(size: 11))
-                .foregroundStyle(Theme.mutedStrong)
-                .lineLimit(1)
-                .truncationMode(.head)
+            if showsFolder {
+                Text((project.displayPath as NSString).deletingLastPathComponent)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.mutedStrong)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
         }
+        .help(project.displayPath)
         .accessibilityElement(children: .combine)
     }
 }
@@ -81,9 +86,9 @@ struct ProjectDetailView: View {
     }
 
     private func removeMessage(for entry: MCPEntry) -> String {
-        var message = "This removes “\(entry.name)” from \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))"
+        var message = "It comes out of \(fileName(entry))"
         if case .claudeLocal = entry.scope { message += " for \(project.name) only" }
-        message += ". A backup is kept in \(abbreviate(model.paths.backupDir))."
+        message += ". MCP Manager backs up the file first."
         if case .claudeProject = entry.scope {
             message += " .mcp.json is often committed to the repo, so teammates may see this change."
         }
@@ -133,7 +138,7 @@ struct ProjectDetailView: View {
             Text("No MCPs configured for \(project.name)")
                 .font(Theme.title)
                 .foregroundStyle(Theme.heading)
-            Text("Checked these files:")
+            Text("MCP Manager looked in:")
                 .font(Theme.body)
                 .foregroundStyle(Theme.text)
             VStack(alignment: .leading, spacing: 4) {
@@ -155,24 +160,16 @@ struct ProjectDetailView: View {
     }
 
     private var checkedFiles: [String] {
-        let dir = project.displayPath
-        return [
-            "\(abbreviate(model.paths.claudeJSON))  →  projects[\"\(dir)\"].mcpServers",
-            "\(dir)/.mcp.json",
-            "\(dir)/.codex/config.toml",
-        ]
+        ["\(abbreviate(model.paths.claudeJSON)) (this project's entry)", ".mcp.json", ".codex/config.toml"]
     }
 
     private func groupPanel(_ group: SourceGroup) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(group.label)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.heading)
-                        Chip(text: group.entries.count == 1 ? "1 MCP" : "\(group.entries.count) MCPs")
-                    }
+                    Text(group.label)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Theme.heading)
                     Text((group.sourcePath as NSString).abbreviatingWithTildeInPath)
                         .font(Theme.mono(11.5))
                         .foregroundStyle(Theme.mutedStrong)
@@ -186,12 +183,15 @@ struct ProjectDetailView: View {
                 }
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            ForEach(group.entries) { entry in
-                Hairline()
+            .padding(.vertical, 8)
+            .background(Theme.heading.opacity(0.03))
+            Hairline()
+            ForEach(Array(group.entries.enumerated()), id: \.element.id) { index, entry in
+                if index > 0 { Hairline().padding(.leading, 54) }
                 ProjectEntryRow(entry: entry, onEdit: { editing = entry }, onRemove: { removing = entry })
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
         .orcPanel()
     }
 }
@@ -218,61 +218,21 @@ private struct ProjectEntryRow: View {
     }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            details
-            Spacer(minLength: 8)
-            HStack(spacing: 6) {
-                Button("Open", action: open)
-                    .buttonStyle(.orc(.secondary, compact: true))
-                    .help("Open \(entry.name) to connect, run its tools and read its logs")
-                Button("Edit…", action: onEdit)
-                    .buttonStyle(.orc(.secondary, compact: true))
-                    .disabled(model.isWriting)
-                Button("Remove…", action: onRemove)
-                    .buttonStyle(.orc(.destructive, compact: true))
-                    .disabled(model.isWriting)
+        ServerListRow(name: entry.name, transport: entry.config.transport, detail: detailKeys, onOpen: open) {
+            if !entry.config.enabled {
+                Chip(text: "Disabled", tone: .yellow)
             }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .contextMenu {
-            Button("Open", action: open)
+            if let inspector = model.inspector(forKey: MCPServerTarget.project(entry).key) {
+                InspectorStatusChip(inspector: inspector)
+            }
+        } accessory: {
+            EmptyView()
+        } menuItems: {
             Button("Edit…", action: onEdit)
+                .disabled(model.isWriting)
             Divider()
             Button("Remove…", role: .destructive, action: onRemove)
-        }
-    }
-
-    private var details: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                Text(entry.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.heading)
-                    .textSelection(.enabled)
-                Chip(text: entry.client.displayName)
-                Chip(text: entry.config.transport.kindLabel)
-                if !entry.config.enabled {
-                    Chip(text: "Disabled", tone: .yellow)
-                }
-                if let inspector = model.inspector(forKey: MCPServerTarget.project(entry).key) {
-                    InspectorStatusChip(inspector: inspector)
-                }
-            }
-            Text(entry.config.transport.summary)
-                .font(Theme.mono())
-                .foregroundStyle(Theme.text)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .textSelection(.enabled)
-                .help(entry.config.transport.summary)
-            if let detailKeys {
-                Text(detailKeys)
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mutedStrong)
-                    .lineLimit(1)
-            }
+                .disabled(model.isWriting)
         }
     }
 }

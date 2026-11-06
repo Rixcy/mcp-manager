@@ -66,23 +66,15 @@ private struct InspectorHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // One row keeps the header short; the back button drops its text before the
-            // chips fall back to a second line under the title in narrow windows.
+            // The back button drops its text before the title block has to truncate in narrow windows.
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .center, spacing: 12) {
                     backButton(iconOnly: false)
-                    inlineTitle
+                    titleBlock.fixedSize()
                 }
                 HStack(alignment: .center, spacing: 8) {
                     backButton(iconOnly: true)
-                    inlineTitle
-                }
-                HStack(alignment: .center, spacing: 8) {
-                    backButton(iconOnly: true)
-                    VStack(alignment: .leading, spacing: 4) {
-                        title
-                        chips
-                    }
+                    titleBlock
                 }
             }
             Spacer(minLength: 8)
@@ -115,10 +107,24 @@ private struct InspectorHeader: View {
         .help("\(model.backLabel(for: inspector.key)) (⌘[)")
     }
 
-    private var inlineTitle: some View {
-        HStack(alignment: .center, spacing: 10) {
-            title.fixedSize()
-            chips
+    private var titleBlock: some View {
+        HStack(alignment: .center, spacing: 12) {
+            TransportIcon(transport: inspector.target.config.transport, size: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 8) {
+                    title
+                    InspectorStatusChip(inspector: inspector)
+                }
+                HStack(spacing: 6) {
+                    Text("\(inspector.target.config.transport.kindLabel) · \(inspector.target.locationLabel)")
+                    if case let .connecting(step) = inspector.state {
+                        Text("· \(step.label)")
+                    }
+                }
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.mutedStrong)
+                .lineLimit(1)
+            }
         }
     }
 
@@ -128,21 +134,6 @@ private struct InspectorHeader: View {
             .foregroundStyle(Theme.heading)
             .lineLimit(1)
             .textSelection(.enabled)
-    }
-
-    private var chips: some View {
-        HStack(spacing: 4) {
-            Chip(text: inspector.target.config.transport.kindLabel)
-            Chip(text: inspector.target.locationLabel)
-            InspectorStatusChip(inspector: inspector)
-            if case let .connecting(step) = inspector.state {
-                Text(step.label)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.mutedStrong)
-                    .lineLimit(1)
-                    .fixedSize()
-            }
-        }
     }
 
     @ViewBuilder
@@ -242,11 +233,6 @@ private struct TabButton: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(RoundedRectangle(cornerRadius: 6).fill(selected ? Theme.chip : .clear))
-            .overlay(alignment: .bottom) {
-                if selected {
-                    Rectangle().fill(Theme.accent).frame(height: 2).padding(.horizontal, 8)
-                }
-            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

@@ -56,12 +56,13 @@ struct MenuBarView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     ForEach(Array(model.globals.enumerated()), id: \.element.id) { index, server in
-                        if index > 0 { Hairline() }
-                        CompactServerRow(server: server)
+                        if index > 0 { Hairline().padding(.leading, 10) }
+                        CompactServerRow(server: server) { openServer(server) }
                     }
                 }
             }
-            .frame(maxHeight: min(CGFloat(model.globals.count) * 68, 300))
+            .frame(height: min(CGFloat(model.globals.count) * CompactServerRow.height, 300))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
             .orcPanel()
         }
     }
@@ -112,6 +113,12 @@ struct MenuBarView: View {
         .background(Theme.panel)
     }
 
+    private func openServer(_ server: GlobalServer) {
+        guard let target = MCPServerTarget.global(server) else { return }
+        model.inspect(target)
+        openWindow.mainWindow()
+    }
+
     private func open(_ project: ProjectRef) {
         model.open(project)
         query = ""
@@ -120,33 +127,43 @@ struct MenuBarView: View {
 }
 
 private struct CompactServerRow: View {
+    /// A ScrollView in the menu bar window does not size to its content, so the list height is estimated from this.
+    static let height: CGFloat = 50
+
     @EnvironmentObject private var model: AppModel
     let server: GlobalServer
+    let onOpen: () -> Void
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(server.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Theme.heading)
-                    .lineLimit(1)
-                Text(server.primaryConfig?.transport.summary ?? "")
-                    .font(Theme.mono(11))
-                    .foregroundStyle(Theme.mutedStrong)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                ClientChips(server: server)
+            Button(action: onOpen) {
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(server.name)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.heading)
+                            .lineLimit(1)
+                        AvailabilityChips(server: server)
+                    }
+                    Text(server.primaryConfig?.transport.summary ?? "")
+                        .font(Theme.mono(11))
+                        .foregroundStyle(Theme.mutedStrong)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                .padding(.horizontal, 10)
+                .frame(minHeight: Self.height)
             }
-            Spacer(minLength: 4)
+            .buttonStyle(HoverRowStyle())
+            .accessibilityHint("Opens \(server.name) in the MCP Manager window")
             if case let .onlyIn(_, syncable) = availability(of: server), syncable {
                 Button("Sync") { Task { await model.sync(server.name) } }
                     .buttonStyle(.orc(.secondary, compact: true))
                     .disabled(model.isWriting)
                     .help("Copy \(server.name) into \(clientList(server.missingClients))")
+                    .padding(.trailing, 10)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
     }
 }
 

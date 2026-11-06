@@ -18,26 +18,145 @@ struct Chip: View {
     }
 }
 
-/// Which clients carry a global server, named in text.
-struct ClientChips: View {
+/// Flags a global server that differs between the clients. A server both
+/// clients carry is the normal state of the Global list, so it gets no chip.
+struct AvailabilityChips: View {
     let server: GlobalServer
 
     var body: some View {
-        HStack(spacing: 4) {
-            ForEach(server.clients) { client in
-                Chip(text: client.displayName)
+        if case let .onlyIn(client, syncable) = availability(of: server) {
+            Chip(text: syncable ? "\(client.displayName) only" : "\(client.displayName) only · no SSE in Codex",
+                 tone: syncable ? .gate : .neutral)
+        }
+        if server.codex?.enabled == false {
+            Chip(text: "Disabled in Codex", tone: .yellow)
+        }
+    }
+}
+
+struct TransportIcon: View {
+    let transport: MCPTransport
+    var size: CGFloat = 28
+
+    var body: some View {
+        Image(systemName: symbol)
+            .font(.system(size: size * 0.45, weight: .medium))
+            .foregroundStyle(Theme.mutedStrong)
+            .frame(width: size, height: size)
+            .background(RoundedRectangle(cornerRadius: size / 4).fill(Theme.chip))
+            .accessibilityLabel(transport.kindLabel)
+            .help(transport.kindLabel)
+    }
+
+    private var symbol: String {
+        switch transport {
+        case .stdio: return "terminal"
+        case .http: return "globe"
+        case .sse: return "dot.radiowaves.left.and.right"
+        }
+    }
+}
+
+/// Edit and Remove live in the trailing menu so a row shows one visible action at most.
+struct ServerListRow<Badges: View, Accessory: View, MenuItems: View>: View {
+    let name: String
+    let transport: MCPTransport
+    var detail: String?
+    let onOpen: () -> Void
+    @ViewBuilder var badges: () -> Badges
+    @ViewBuilder var accessory: () -> Accessory
+    @ViewBuilder var menuItems: () -> MenuItems
+
+    @State private var hovering = false
+
+    private var copyLabel: String {
+        if case .stdio = transport { return "Copy Command" }
+        return "Copy URL"
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button(action: onOpen) {
+                HStack(spacing: 12) {
+                    TransportIcon(transport: transport)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(name)
+                                .font(.system(size: 13.5, weight: .semibold))
+                                .foregroundStyle(Theme.heading)
+                                .lineLimit(1)
+                            badges()
+                        }
+                        Text(transport.summary)
+                            .font(Theme.mono(11.5))
+                            .foregroundStyle(Theme.mutedStrong)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let detail {
+                            Text(detail)
+                                .font(Theme.mono(11))
+                                .foregroundStyle(Theme.muted)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                }
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
             }
-            switch availability(of: server) {
-            case .both:
-                EmptyView()
-            case let .onlyIn(client, syncable):
-                Chip(text: syncable ? "\(client.displayName) only" : "\(client.displayName) only · no SSE in Codex",
-                     tone: syncable ? .gate : .neutral)
+            .buttonStyle(.plain)
+            .help(transport.summary)
+            .accessibilityHint("Opens \(name) to connect, run its tools and read its logs")
+            accessory()
+            Menu {
+                menuItems()
+                Button(copyLabel) { copyToPasteboard(transport.summary) }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 18, height: 18)
             }
-            if server.codex?.enabled == false {
-                Chip(text: "Disabled in Codex", tone: .yellow)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .tint(Theme.mutedStrong)
+            .accessibilityLabel("More actions for \(name)")
+            .help("More actions")
+            Button(action: onOpen) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(hovering ? Theme.mutedStrong : Theme.muted)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 14)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(Theme.heading.opacity(hovering ? 0.045 : 0))
+        .onHover { hovering = $0 }
+        .contextMenu {
+            Button("Open", action: onOpen)
+            menuItems()
+            Button(copyLabel) { copyToPasteboard(transport.summary) }
+        }
+    }
+}
+
+struct ServerList<Item: Identifiable, Row: View>: View {
+    let items: [Item]
+    @ViewBuilder var row: (Item) -> Row
+
+    var body: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if index > 0 { Hairline().padding(.leading, 54) }
+                row(item)
             }
         }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.panelRadius))
+        .orcPanel()
     }
 }
 
@@ -289,7 +408,7 @@ struct StatusBanners: View {
 
 struct Hairline: View {
     var body: some View {
-        Rectangle().fill(Theme.border).frame(height: 1)
+        Rectangle().fill(Theme.border.opacity(0.7)).frame(height: 1)
     }
 }
 

@@ -27,23 +27,28 @@ struct MainWindow: View {
 
     private var sidebar: some View {
         let ranked = model.rankedProjects(query)
+        let sharedNames = Dictionary(grouping: model.projects, by: \.name).filter { $0.value.count > 1 }.keys
         return List {
             Section {
                 HStack(spacing: 8) {
-                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                    Image(systemName: "globe")
                         .foregroundStyle(Theme.mutedStrong)
+                        .frame(width: 16)
                         .accessibilityHidden(true)
-                    Text("Claude & Codex")
+                    Text("Global MCPs")
+                        .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.heading)
                     Spacer()
                     if model.hasLoaded, model.loadError == nil {
-                        Chip(text: "\(model.globals.count)")
-                            .accessibilityLabel("\(model.globals.count) global MCPs")
+                        Text("\(model.globals.count)")
+                            .font(Theme.label)
+                            .monospacedDigit()
+                            .foregroundStyle(Theme.mutedStrong)
+                            .accessibilityLabel("\(model.globals.count) servers")
                     }
                 }
+                .padding(.vertical, 3)
                 .sidebarRow(.globals, selection: $model.route)
-            } header: {
-                SectionLabel("Global MCPs")
             }
 
             if !model.inspectorOrder.isEmpty {
@@ -66,7 +71,8 @@ struct MainWindow: View {
                     FieldMessage(text: "No project matches “\(query)”.", tone: .neutral)
                 }
                 ForEach(ranked) { project in
-                    ProjectRow(project: project)
+                    ProjectRow(project: project, showsFolder: sharedNames.contains(project.name))
+                        .padding(.vertical, 2)
                         .sidebarRow(.project(project.path), selection: $model.route)
                 }
             } header: {

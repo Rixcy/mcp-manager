@@ -7,7 +7,7 @@ A macOS menu bar app that keeps your MCP servers in step across **Claude Code** 
   <img alt="MCP Manager main window listing global MCPs shared by Claude and Codex" src="assets/screenshots/main-window-light.png" width="800">
 </picture>
 
-- **Global MCPs:** add, edit, rename and remove. Adding writes to Claude and Codex at the same time. A server that only one client has is flagged "Claude only" or "Codex only", with a **Sync** button.
+- **Global MCPs:** add, edit (including the name) and remove from each row's **⋯** menu. Adding writes to Claude and Codex at the same time. A server that only one client has is flagged "Claude only" or "Codex only", with a **Sync** button.
 - **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …), see every MCP configured for it, and edit or remove each one in the file it came from.
 - **MCP client:** open any server to connect to it, list its tools, call them with a generated form or raw JSON, read its resources and prompts, and read a log of every message. Works over stdio, Streamable HTTP and SSE, signs in to OAuth servers, and explains failures with the fix.
 - **Menu bar:** quick list, sync, project search, and shortcuts into the full window.
@@ -46,7 +46,7 @@ It stops with an error instead of capturing if the window could be seen, the har
 
 ## Use a server
 
-1. Click **Open** on a global or project MCP, then **Connect**.
+1. Click a global or project MCP, then **Connect**.
 2. Pick a tool, fill in its arguments (or switch to **JSON**), and press **Run** (⌘↩).
 3. Read the result, or the error and what to do about it.
 

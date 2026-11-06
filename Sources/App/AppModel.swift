@@ -274,13 +274,6 @@ final class AppModel: ObservableObject {
         lastNotice = Self.describe(report, done: "Added \(name) to", nothing: "Nothing was added for \(name).")
     }
 
-    func rename(_ oldName: String, to newName: String) async throws {
-        let old = globals.first { $0.name == oldName }.flatMap(MCPServerTarget.global)
-        let report = try await write { try $0.rename(oldName, to: newName) }
-        if let old { carryVariables(of: old, to: newName) }
-        lastNotice = Self.describe(report, done: "Renamed \(oldName) to \(newName) in", nothing: "\(oldName) was not renamed.")
-    }
-
     func remove(_ name: String, from clients: Set<MCPClient>) async {
         do {
             let report = try await write { try $0.remove(name: name, from: clients) }
