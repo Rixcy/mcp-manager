@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Builds Sources/Core with the Tests/ harness and runs it. SwiftPM and XCTest
+# are unavailable with Command Line Tools only, so this is plain swiftc.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+mkdir -p .build
+swiftc -Onone -swift-version 5 -target arm64-apple-macos14.0 -module-name CoreTests \
+  Sources/Core/*.swift Tests/*.swift -o .build/core-tests
+.build/core-tests

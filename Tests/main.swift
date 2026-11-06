@@ -1,0 +1,7 @@
+runMiniTOMLTests()
+runCodexConfigStoreTests()
+runClaudeConfigStoreTests()
+runMCPManagerTests()
+runProjectIndexTests()
+runFuzzyMatcherTests()
+finishTests()
