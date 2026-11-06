@@ -1,0 +1,17 @@
+.DS_Store
+.env
+.env.*
+!.env.example
+!.env.sample
+*.log
+
+# agent files (orc-init)
+.claude/settings.local.json
+*.local.md
+AGENTS.override.md
+.mcp.json
+.codex/
+.aider*
+.specstory/
+.impeccable/
+.orc/
