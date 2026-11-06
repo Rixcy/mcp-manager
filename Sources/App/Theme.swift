@@ -29,7 +29,6 @@ enum Theme {
     static let mutedStrong = dynamic(day: mix(0x6e7971, 0x38423c, 0.4), night: mix(0x707a73, 0xc7cfca, 0.35))
 
     static let panelRadius: CGFloat = 8
-    static let chipRadius: CGFloat = 12
 
     static let tintFill = 0.13
     static let tintBorder = 0.4

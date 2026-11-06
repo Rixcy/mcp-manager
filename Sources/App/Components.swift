@@ -12,8 +12,8 @@ struct Chip: View {
             .lineLimit(1)
             .padding(.horizontal, 8)
             .padding(.vertical, 2)
-            .background(RoundedRectangle(cornerRadius: Theme.chipRadius).fill(tone.fill))
-            .overlay(RoundedRectangle(cornerRadius: Theme.chipRadius).strokeBorder(tone.stroke, lineWidth: 1))
+            .background(Capsule().fill(tone.fill))
+            .overlay(Capsule().strokeBorder(tone.stroke, lineWidth: 1))
             .fixedSize()
     }
 }
