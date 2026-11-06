@@ -77,6 +77,19 @@ def pkce_s256(verifier):
     return base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
 
 
+def mcp_result(method):
+    """Just enough MCP for a client to connect and list tools once signed in."""
+    if method == "initialize":
+        return {"protocolVersion": "2025-06-18", "capabilities": {"tools": {}},
+                "serverInfo": {"name": "oauth-fixture", "version": "1.0.0"}}
+    if method == "tools/list":
+        return {"tools": [{"name": "whoami", "description": "Says who is signed in.",
+                           "inputSchema": {"type": "object", "properties": {}}}]}
+    if method == "tools/call":
+        return {"content": [{"type": "text", "text": "signed in"}]}
+    return {"ok": True}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "OAuthFixture/1"
 
@@ -152,7 +165,12 @@ class Handler(BaseHTTPRequestHandler):
             request = json.loads(body or b"{}")
         except ValueError:
             request = {}
-        self.send_json(200, {"jsonrpc": "2.0", "id": request.get("id"), "result": {"ok": True}})
+        if "id" not in request:
+            self.send_response(202)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        self.send_json(200, {"jsonrpc": "2.0", "id": request.get("id"), "result": mcp_result(request.get("method"))})
 
     def protected_resource_metadata(self, path):
         if ARGS.no_prm or (ARGS.prm_root_only and path.endswith("/mcp")):
