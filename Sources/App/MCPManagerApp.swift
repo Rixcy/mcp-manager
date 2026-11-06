@@ -23,6 +23,7 @@ struct MCPManagerApp: App {
                 .environmentObject(model)
                 .tint(Theme.accent)
         }
+        .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 980, height: 640)
         .windowResizability(.contentMinSize)
         .commands {

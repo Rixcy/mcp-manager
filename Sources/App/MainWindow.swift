@@ -11,8 +11,10 @@ struct MainWindow: View {
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Theme.bg)
-                .toolbarBackground(Theme.panel, for: .windowToolbar)
+                .background(Theme.bg.ignoresSafeArea())
+                // The detail toolbar holds no items, so a visible background
+                // draws an empty bar above the page header.
+                .toolbarBackground(.hidden, for: .windowToolbar)
         }
         .frame(minWidth: 860, minHeight: 560)
         .sheet(isPresented: $model.isAddingServer) {

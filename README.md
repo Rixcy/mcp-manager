@@ -2,6 +2,11 @@
 
 A macOS menu bar app that keeps your MCP servers in step across **Claude Code** and **Codex**. Themed with the Orc design system.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/main-window-dark.png">
+  <img alt="MCP Manager main window listing global MCPs shared by Claude and Codex" src="assets/screenshots/main-window-light.png" width="800">
+</picture>
+
 - **Global MCPs:** add, rename and remove. Adding writes to Claude and Codex at the same time. A server that only one client has is flagged "Claude only" or "Codex only", with a **Sync** button.
 - **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …) and see every MCP configured for it.
 - **Menu bar:** quick list, sync, project search, and shortcuts into the full window.
