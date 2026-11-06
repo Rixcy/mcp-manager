@@ -21,6 +21,9 @@ struct InspectorView: View {
             tabContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
+        // Without a floor, SwiftUI measures the wrapped error and empty-state text at a
+        // near-zero width when sizing the window, and the page asks to be thousands of points tall.
+        .frame(minWidth: 480)
     }
 
     @ViewBuilder
@@ -210,6 +213,19 @@ private struct TabButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel(count.map { "\(title), \($0)" } ?? title)
         .accessibilityAddTraits(selected ? [.isSelected, .isButton] : .isButton)
+    }
+}
+
+/// A tab body that scrolls instead of growing the window when the window is short.
+struct InspectorPane<Content: View>: View {
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ScrollView {
+            content
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+        }
     }
 }
 

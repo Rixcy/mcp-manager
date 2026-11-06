@@ -456,7 +456,7 @@ final class InspectorModel: ObservableObject, Identifiable {
                                            openBrowser: { url in
                                                let opened = await MainActor.run { NSWorkspace.shared.open(url) }
                                                if !opened {
-                                                   throw MCPClientError.oauth(.callbackServerFailed("Could not open \(url.absoluteString) in a browser."))
+                                                   throw MCPClientError.oauth(.callbackServerFailed("macOS could not open the sign-in page in your default browser"))
                                                }
                                            })
                 guard current == generation else { return }
@@ -877,11 +877,12 @@ final class InspectorModel: ObservableObject, Identifiable {
         }
     }
 
-    /// Names the config needs that neither the shell, the config's own env nor this server's variables provide.
+    /// Names the config needs that neither the shell nor this server's variables provide. The
+    /// config's own env doesn't count: `${VAR}` expands from the shell, as in Claude Code, so
+    /// `"GITHUB_TOKEN": "${GITHUB_TOKEN}"` still needs GITHUB_TOKEN from somewhere else.
     func missingVariables(shell: ShellEnvironment?) -> [String] {
         var provided = Set(variableRows.map { $0.key.trimmingCharacters(in: .whitespaces) })
         if let shell { provided.formUnion(shell.variables.keys) }
-        if case let .stdio(_, _, env) = target.config.transport { provided.formUnion(env.keys) }
         var seen = Set<String>()
         return VariableExpansion.requiredNames(in: target.config).filter { !provided.contains($0) && seen.insert($0).inserted }
     }

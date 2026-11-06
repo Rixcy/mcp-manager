@@ -62,10 +62,11 @@ struct InspectorResourcesView: View {
 
     var body: some View {
         if !inspector.isConnected {
-            NotConnectedState(inspector: inspector, what: "resources").padding(16)
+            InspectorPane { NotConnectedState(inspector: inspector, what: "resources") }
         } else if inspector.resources.isEmpty && inspector.templates.isEmpty {
-            EmptyStateView(title: "No resources", message: "\(inspector.target.name) lists no resources or templates.")
-                .padding(16)
+            InspectorPane {
+                EmptyStateView(title: "No resources", message: "\(inspector.target.name) lists no resources or templates.")
+            }
         } else {
             CatalogSplit {
                 if !inspector.resources.isEmpty { SectionLabel("Resources").padding(.horizontal, 8) }
@@ -185,10 +186,11 @@ struct InspectorPromptsView: View {
 
     var body: some View {
         if !inspector.isConnected {
-            NotConnectedState(inspector: inspector, what: "prompts").padding(16)
+            InspectorPane { NotConnectedState(inspector: inspector, what: "prompts") }
         } else if inspector.prompts.isEmpty {
-            EmptyStateView(title: "No prompts", message: "\(inspector.target.name) lists no prompts.")
-                .padding(16)
+            InspectorPane {
+                EmptyStateView(title: "No prompts", message: "\(inspector.target.name) lists no prompts.")
+            }
         } else {
             CatalogSplit {
                 ForEach(inspector.prompts) { prompt in

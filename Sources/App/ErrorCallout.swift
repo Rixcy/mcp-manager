@@ -49,7 +49,7 @@ struct ErrorCallout: View {
             }
             if let details = error.details, !details.isEmpty {
                 DisclosureGroup(isExpanded: $showDetails) {
-                    CodeBlock(text: details, copyLabel: "Copy details")
+                    detailsBlock(details)
                         .padding(.top, 4)
                 } label: {
                     Text("Technical details")
@@ -62,6 +62,19 @@ struct ErrorCallout: View {
         .padding(12)
         .background(RoundedRectangle(cornerRadius: Theme.panelRadius).fill(Tone.red.hue.opacity(Theme.tintFill)))
         .overlay(RoundedRectangle(cornerRadius: Theme.panelRadius).strokeBorder(Tone.red.hue.opacity(Theme.tintBorder), lineWidth: 1))
+    }
+
+    /// A stderr tail can run to 20 lines; past a few it scrolls so the tabs stay on screen.
+    @ViewBuilder
+    private func detailsBlock(_ details: String) -> some View {
+        if details.split(separator: "\n", omittingEmptySubsequences: false).count > 8 || details.count > 900 {
+            ScrollView {
+                CodeBlock(text: details, copyLabel: "Copy details")
+            }
+            .frame(height: 180)
+        } else {
+            CodeBlock(text: details, copyLabel: "Copy details")
+        }
     }
 
     @ViewBuilder

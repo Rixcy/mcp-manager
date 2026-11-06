@@ -52,6 +52,7 @@ struct InspectorEnvironmentView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .orcPanel(padding: 14)
     }
 

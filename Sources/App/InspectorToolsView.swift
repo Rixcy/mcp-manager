@@ -5,16 +5,14 @@ struct InspectorToolsView: View {
 
     var body: some View {
         if !inspector.isConnected {
-            NotConnectedState(inspector: inspector, what: "tools")
-                .padding(16)
+            InspectorPane { NotConnectedState(inspector: inspector, what: "tools") }
         } else if inspector.tools.isEmpty {
-            VStack {
+            InspectorPane {
                 EmptyStateView(title: "No tools",
                                message: inspector.capabilities?.tools == true
                                    ? "\(inspector.target.name) is connected but lists no tools."
                                    : "\(inspector.target.name) does not offer tools.")
             }
-            .padding(16)
         } else {
             HStack(spacing: 0) {
                 ToolListColumn(inspector: inspector)
