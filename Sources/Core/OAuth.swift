@@ -59,7 +59,8 @@ public final class OAuthClient: @unchecked Sendable {
 
     /// Runs the browser sign-in and stores the result. `challenge` is the 401's
     /// `WWW-Authenticate` header; `hints` is Claude's pre-registered client, if any.
-    public func signIn(serverURL: URL, challenge: String?, hints: MCPOAuthHints?,
+    /// Each step is recorded in `log` without tokens, codes or secrets.
+    public func signIn(serverURL: URL, challenge: String?, hints: MCPOAuthHints?, log: MCPLogSink? = nil,
                        openBrowser: @escaping @Sendable (URL) async throws -> Void) async throws -> OAuthCredential {
         throw MCPClientError.oauth(.discoveryFailed(url: serverURL.absoluteString, detail: "not implemented"))
     }
