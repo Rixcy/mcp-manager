@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# Screenshots the app's real views against a throwaway fixture home, in the
+# background: no window appears, nothing takes focus, and MCP Manager.app is
+# never launched. See "Screenshots" in the README.
+set -euo pipefail
+
+usage() {
+    cat <<EOF
+usage: bin/capture <out-dir> [scene...]
+
+scenes: globals, project, server (default: all three)
+env:
+  CAPTURE_APPEARANCE  light, dark or light,dark (default: light,dark)
+  MCP_MANAGER_HOME    fixture home to read (default: a fresh bin/fixture-home)
+EOF
+}
+
+case "${1:-}" in
+    -h|--help) usage; exit 0 ;;
+    "") usage >&2; exit 2 ;;
+esac
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$(mkdir -p "$1" && cd "$1" && pwd)"
+shift
+SCENES=("$@")
+[[ ${#SCENES[@]} -gt 0 ]] || SCENES=(globals project server)
+
+BUILD="$REPO/.build/capture"
+mkdir -p "$BUILD/src"
+rm -f "$BUILD"/src/*.swift
+cp "$REPO"/Sources/Core/*.swift "$REPO"/Sources/App/*.swift "$BUILD/src/"
+# The harness supplies its own entry point instead of the app's.
+sed -i '' 's/^@main$//' "$BUILD/src/MCPManagerApp.swift"
+swiftc -Onone -swift-version 5 -target arm64-apple-macos14.0 -module-name MCPManagerCapture \
+    "$BUILD"/src/*.swift "$REPO/Tools/Capture/main.swift" -o "$BUILD/capture"
+
+HOME_DIR="${MCP_MANAGER_HOME:-}"
+if [[ -z "$HOME_DIR" ]]; then
+    HOME_DIR="$("$REPO/bin/fixture-home" "$(mktemp -d)")"
+fi
+
+"$BUILD/capture" "$HOME_DIR" "$OUT" "${CAPTURE_APPEARANCE:-light,dark}" "${SCENES[@]}"

@@ -32,6 +32,18 @@ MCP_MANAGER_HOME="$(bin/fixture-home "$(mktemp -d)")" mcp-manager open
 
 Quit any running copy first: the home is only read at launch. The fixture home has a working `demo` server to connect to, and a `reels` project server whose variable is not set.
 
+## Screenshots in the background
+
+```sh
+bin/capture /tmp/shots                  # globals, project and server pages, light and dark
+bin/capture /tmp/shots server           # one page
+CAPTURE_APPEARANCE=dark bin/capture /tmp/shots globals
+```
+
+`bin/capture` builds the app's real views into a small harness and screenshots them against a fresh fixture home. Nothing appears on screen and nothing takes focus: the window sits one layer below the desktop wallpaper, and `screencapture -l` reads it from there. MCP Manager.app is never launched, so your real configs and keychain are never touched. Set `MCP_MANAGER_HOME` to capture a different fixture home.
+
+It stops with an error instead of capturing if the window could be seen, the harness takes focus, or a sheet or alert opens. The terminal running it needs Screen Recording permission. Add a page by adding a case to `CaptureScene` in `Tools/Capture/main.swift`.
+
 ## Use a server
 
 1. Click **Open** on a global or project MCP, then **Connect**.
@@ -63,5 +75,6 @@ Sources/Core   config models, Claude JSON + Codex TOML stores, fuzzy matcher, an
                JSON-RPC, stdio/HTTP/SSE transports, OAuth, environment, logs, helpful errors
 Sources/App    SwiftUI menu bar extra, main window and server pages
 Tests          swiftc-built test runner for Sources/Core, with Python fixture servers in Tests/Fixtures
+Tools/Capture  background screenshot harness behind bin/capture
 assets         app icon and logo (Orc-themed)
 ```
