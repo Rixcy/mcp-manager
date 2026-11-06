@@ -8,7 +8,7 @@ A macOS menu bar app that keeps your MCP servers in step across **Claude Code** 
 </picture>
 
 - **Global MCPs:** add, rename and remove. Adding writes to Claude and Codex at the same time. A server that only one client has is flagged "Claude only" or "Codex only", with a **Sync** button.
-- **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …) and see every MCP configured for it.
+- **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …), see every MCP configured for it, and edit or remove each one in the file it came from.
 - **Menu bar:** quick list, sync, project search, and shortcuts into the full window.
 
 ## Install and open
@@ -36,7 +36,7 @@ Quit any running copy first: the home is only read at launch.
 | Where | Claude | Codex |
 | --- | --- | --- |
 | Global (read + write) | `~/.claude.json` → `mcpServers` | `~/.codex/config.toml` (or `$CODEX_HOME`) → `[mcp_servers.*]` |
-| Project (read only) | `~/.claude.json` → `projects[path].mcpServers`, `<project>/.mcp.json` | `<project>/.codex/config.toml` |
+| Project (edit and remove in place) | `~/.claude.json` → `projects[path].mcpServers`, `<project>/.mcp.json` | `<project>/.codex/config.toml` |
 
 - Before every write, the original file is copied to `~/Library/Application Support/MCP Manager/Backups/`. The newest 20 per file are kept.
 - Writes are atomic. If Claude or Codex rewrites the file mid-save, the edit is re-applied, up to 3 attempts.

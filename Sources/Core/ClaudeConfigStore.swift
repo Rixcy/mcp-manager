@@ -38,9 +38,23 @@ struct ClaudeConfigStore {
         }
     }
 
-    func remove(name: String) throws {
-        try editServers { servers in
+    /// `project` targets that project's local-scope `mcpServers` instead of the top-level one.
+    func remove(name: String, project: String? = nil) throws {
+        try editServers(project: project) { servers in
             guard servers.removeValue(forKey: name) != nil else { throw MCPManagerError.notFound(name: name) }
+        }
+    }
+
+    /// Replaces the modelled keys of `name` with `config`, keeping keys MCP
+    /// Manager does not model (such as `oauth`), and renames it to `newName`.
+    func update(name: String, to newName: String, config: MCPServerConfig, project: String? = nil) throws {
+        try editServers(project: project) { servers in
+            guard let old = servers[name] else { throw MCPManagerError.notFound(name: name) }
+            if newName != name, servers[newName] != nil { throw MCPManagerError.nameTaken(name: newName, client: .claude) }
+            var entry = (old as? [String: Any] ?? [:]).filter { !Self.modelledKeys.contains($0.key) }
+            entry.merge(Self.entryObject(for: config)) { _, new in new }
+            servers.removeValue(forKey: name)
+            servers[newName] = entry
         }
     }
 
@@ -52,12 +66,24 @@ struct ClaudeConfigStore {
         }
     }
 
-    private func editServers(_ change: (inout [String: Any]) throws -> Void) throws {
+    private func editServers(project: String? = nil, _ change: (inout [String: Any]) throws -> Void) throws {
         try io.modify(url) { data in
             var root = try data.map { try Self.parseRoot($0, path: url.path) } ?? [:]
-            var servers = root["mcpServers"] as? [String: Any] ?? [:]
-            try change(&servers)
-            root["mcpServers"] = servers
+            if let project {
+                var projects = root["projects"] as? [String: Any] ?? [:]
+                let target = ProjectIndex.standardize(project)
+                let key = projects.keys.first { ProjectIndex.standardize($0) == target } ?? project
+                var projectEntry = projects[key] as? [String: Any] ?? [:]
+                var servers = projectEntry["mcpServers"] as? [String: Any] ?? [:]
+                try change(&servers)
+                projectEntry["mcpServers"] = servers
+                projects[key] = projectEntry
+                root["projects"] = projects
+            } else {
+                var servers = root["mcpServers"] as? [String: Any] ?? [:]
+                try change(&servers)
+                root["mcpServers"] = servers
+            }
             do {
                 return try JSONSerialization.data(withJSONObject: root,
                                                   options: [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys])
@@ -68,6 +94,9 @@ struct ClaudeConfigStore {
     }
 
     // MARK: Format
+
+    /// Keys `entryObject(for:)` writes; everything else in an entry is kept on update.
+    static let modelledKeys: Set<String> = ["type", "command", "args", "env", "url", "headers"]
 
     static func parseRoot(_ data: Data, path: String) throws -> [String: Any] {
         if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) { return [:] }

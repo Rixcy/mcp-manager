@@ -22,6 +22,8 @@ struct ProjectRow: View {
 struct ProjectDetailView: View {
     @EnvironmentObject private var model: AppModel
     let project: ProjectRef
+    @State private var editing: MCPEntry?
+    @State private var removing: MCPEntry?
 
     private struct SourceGroup: Identifiable {
         let label: String
@@ -48,12 +50,44 @@ struct ProjectDetailView: View {
             Hairline()
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if StatusBanners.hasContent(model) { StatusBanners() }
                     content
                 }
                 .padding(16)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
+        .sheet(item: $editing) { entry in
+            ServerEditorSheet(editing: entry)
+                .environmentObject(model)
+        }
+        .confirmationDialog(
+            removing.map { "Remove “\($0.name)”?" } ?? "",
+            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }),
+            titleVisibility: .visible,
+            presenting: removing
+        ) { entry in
+            Button("Remove from \(fileName(entry))", role: .destructive) {
+                Task { await model.removeProjectEntry(entry) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { entry in
+            Text(removeMessage(for: entry))
+        }
+    }
+
+    private func fileName(_ entry: MCPEntry) -> String {
+        (entry.sourcePath as NSString).lastPathComponent
+    }
+
+    private func removeMessage(for entry: MCPEntry) -> String {
+        var message = "This removes “\(entry.name)” from \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))"
+        if case .claudeLocal = entry.scope { message += " for \(project.name) only" }
+        message += ". A backup is kept in \(abbreviate(model.paths.backupDir))."
+        if case .claudeProject = entry.scope {
+            message += " .mcp.json is often committed to the repo, so teammates may see this change."
+        }
+        return message
     }
 
     private var header: some View {
@@ -71,8 +105,6 @@ struct ProjectDetailView: View {
                     .help(project.path)
             }
             Spacer()
-            Chip(text: "Read-only")
-                .help("Project MCPs are listed for reference. Edit them in the project's own config files.")
             Button("Reveal in Finder") { revealInFinder(project.path) }
                 .buttonStyle(.orc(.secondary, compact: true))
         }
@@ -157,7 +189,7 @@ struct ProjectDetailView: View {
             .padding(.vertical, 10)
             ForEach(group.entries) { entry in
                 Hairline()
-                ProjectEntryRow(entry: entry)
+                ProjectEntryRow(entry: entry, onEdit: { editing = entry }, onRemove: { removing = entry })
             }
         }
         .orcPanel()
@@ -165,7 +197,10 @@ struct ProjectDetailView: View {
 }
 
 private struct ProjectEntryRow: View {
+    @EnvironmentObject private var model: AppModel
     let entry: MCPEntry
+    let onEdit: () -> Void
+    let onRemove: () -> Void
 
     private var detailKeys: String? {
         switch entry.config.transport {
@@ -179,6 +214,28 @@ private struct ProjectEntryRow: View {
     }
 
     var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            details
+            Spacer(minLength: 8)
+            HStack(spacing: 6) {
+                Button("Edit…", action: onEdit)
+                    .buttonStyle(.orc(.secondary, compact: true))
+                Button("Remove…", action: onRemove)
+                    .buttonStyle(.orc(.destructive, compact: true))
+            }
+            .disabled(model.isWriting)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contextMenu {
+            Button("Edit…", action: onEdit)
+            Divider()
+            Button("Remove…", role: .destructive, action: onRemove)
+        }
+    }
+
+    private var details: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 6) {
                 Text(entry.name)
@@ -205,8 +262,5 @@ private struct ProjectEntryRow: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

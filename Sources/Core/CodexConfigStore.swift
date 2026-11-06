@@ -36,6 +36,10 @@ struct CodexConfigStore {
         try edit { text in try Self.renaming(oldName, to: newName, in: text, path: url.path) }
     }
 
+    func update(name: String, to newName: String, config: MCPServerConfig) throws {
+        try edit { text in try Self.updating(name, to: newName, config: config, in: text, path: url.path) }
+    }
+
     private func edit(_ change: (String) throws -> String) throws {
         try io.modify(url) { data in
             let text = try data.map { try Self.decode($0, path: url.path) } ?? ""
@@ -206,6 +210,71 @@ struct CodexConfigStore {
         }
         guard touched else { throw MCPManagerError.notFound(name: oldName) }
         return lines.joined(separator: "\n")
+    }
+
+    /// Keys `serverBlock` writes; any other key or sub-table of the server is carried over on update.
+    private static let modelledKeys: Set<String> = ["command", "args", "env", "url", "http_headers", "bearer_token_env_var", "enabled"]
+
+    /// Rewrites the server's block where it stands. Unmodelled keys of its own
+    /// table and its other sub-tables (e.g. `tools`) are kept verbatim.
+    static func updating(_ oldName: String, to newName: String, config: MCPServerConfig,
+                         in text: String, path: String) throws -> String {
+        if case .sse = config.transport { throw MCPManagerError.io(path: path, detail: sseSkipReason) }
+        let renamed = oldName == newName ? text : try renaming(oldName, to: newName, in: text, path: path)
+        let doc = try MiniTOML.parse(renamed, path: path)
+        let prefix = serverPrefix(newName)
+        var lines = renamed.components(separatedBy: "\n")
+
+        var ranges: [ClosedRange<Int>] = []
+        var keptKeys: [String] = []
+        var keptTables: [String] = []
+        for statement in doc.statements where statement.hasPrefix(prefix) {
+            let ownedByServer = !statement.isHeader && hasPrefix(statement.section, prefix)
+            let key = statement.path.count > prefix.count ? statement.path[prefix.count] : nil
+            if ownedByServer {
+                if statement.section == prefix, let key, !modelledKeys.contains(key) {
+                    keptKeys += lines[statement.firstLine...statement.lastLine]
+                }
+                continue
+            }
+            if statement.isHeader, let key, key != "env", statement.path.count > prefix.count {
+                keptTables += lines[statement.firstLine...trimmedEnd(statement.firstLine...statement.lastLine, in: lines)]
+            } else if !statement.isHeader, let key, !modelledKeys.contains(key) {
+                throw MCPManagerError.io(path: path, detail: "\(newName) sets \(key) with a dotted key; edit it in the file")
+            }
+            ranges.append(statement.firstLine...statement.lastLine)
+        }
+        guard !ranges.isEmpty else { throw MCPManagerError.notFound(name: oldName) }
+
+        var block = try serverBlock(name: newName, config: config, path: path)
+        let envStart = block.dropFirst().firstIndex { $0.hasPrefix("[") } ?? block.count
+        block.insert(contentsOf: keptKeys, at: envStart)
+        block += keptTables
+
+        // One span from the server's first line to its last, joined across blank and comment lines.
+        var merged: [ClosedRange<Int>] = []
+        for range in ranges.sorted(by: { $0.lowerBound < $1.lowerBound }) {
+            if let last = merged.last,
+               range.lowerBound <= last.upperBound + 1
+                || lines[(last.upperBound + 1)..<range.lowerBound].allSatisfy(isBlankOrComment) {
+                merged[merged.count - 1] = last.lowerBound...max(last.upperBound, range.upperBound)
+            } else {
+                merged.append(range)
+            }
+        }
+        for range in merged.dropFirst().reversed() {
+            lines.removeSubrange(range)
+        }
+        let first = merged[0]
+        lines.replaceSubrange(first.lowerBound...trimmedEnd(first, in: lines), with: block)
+        return lines.joined(separator: "\n")
+    }
+
+    /// `range`'s last line with trailing blank lines dropped, so the separator before the next table survives.
+    private static func trimmedEnd(_ range: ClosedRange<Int>, in lines: [String]) -> Int {
+        var upper = range.upperBound
+        while upper > range.lowerBound, isBlank(lines[upper]) { upper -= 1 }
+        return upper
     }
 
     private static func hasPrefix(_ path: [String], _ prefix: [String]) -> Bool {

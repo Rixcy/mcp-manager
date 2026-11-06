@@ -112,6 +112,38 @@ public final class MCPManager: @unchecked Sendable {
         try projectIndex.projectMCPs(project)
     }
 
+    /// Removes one project-level MCP from the file it was read from.
+    public func removeProjectEntry(_ entry: MCPEntry) throws {
+        switch entry.scope {
+        case let .claudeLocal(project):
+            try claudeStore.remove(name: entry.name, project: project)
+        case .claudeProject:
+            try ClaudeConfigStore(url: URL(fileURLWithPath: entry.sourcePath), io: fileIO).remove(name: entry.name)
+        case .codexProject:
+            try CodexConfigStore(url: URL(fileURLWithPath: entry.sourcePath), io: fileIO).remove(name: entry.name)
+        case .global:
+            throw MCPManagerError.notFound(name: entry.name)
+        }
+    }
+
+    /// Replaces one project-level MCP's name and config in its own file, keeping
+    /// settings MCP Manager does not model.
+    public func updateProjectEntry(_ entry: MCPEntry, name: String, config: MCPServerConfig) throws {
+        if Self.validateName(name) != nil { throw MCPManagerError.invalidName(name) }
+        switch entry.scope {
+        case let .claudeLocal(project):
+            try claudeStore.update(name: entry.name, to: name, config: config, project: project)
+        case .claudeProject:
+            try ClaudeConfigStore(url: URL(fileURLWithPath: entry.sourcePath), io: fileIO)
+                .update(name: entry.name, to: name, config: config)
+        case .codexProject:
+            try CodexConfigStore(url: URL(fileURLWithPath: entry.sourcePath), io: fileIO)
+                .update(name: entry.name, to: name, config: config)
+        case .global:
+            throw MCPManagerError.notFound(name: entry.name)
+        }
+    }
+
     /// `nil` when valid, else a message for the field.
     public static func validateName(_ name: String) -> String? {
         if name.isEmpty { return "Enter a name." }

@@ -139,6 +139,21 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func removeProjectEntry(_ entry: MCPEntry) async {
+        do {
+            _ = try await write { try $0.removeProjectEntry(entry); return WriteReport(written: [entry.client]) }
+            lastNotice = "Removed \(entry.name) from \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))."
+        } catch {
+            fail(error)
+        }
+    }
+
+    /// Throws so the editor sheet can show the failure inline.
+    func updateProjectEntry(_ entry: MCPEntry, name: String, config: MCPServerConfig) async throws {
+        _ = try await write { try $0.updateProjectEntry(entry, name: name, config: config); return WriteReport(written: [entry.client]) }
+        lastNotice = "Saved \(name) in \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))."
+    }
+
     func sync(_ name: String) async {
         do {
             let report = try await write { try $0.sync(name: name) }

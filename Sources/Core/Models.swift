@@ -162,7 +162,7 @@ public enum MCPManagerError: LocalizedError, Equatable {
         case let .nameTaken(name, client):
             return "\(client.displayName) already has an MCP called “\(name)”."
         case let .notFound(name):
-            return "No global MCP called “\(name)”."
+            return "No MCP called “\(name)”."
         case let .parse(path, detail):
             return "Could not read \(path): \(detail)"
         case let .concurrentModification(path):

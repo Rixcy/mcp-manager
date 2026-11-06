@@ -31,6 +31,32 @@ struct ServerEditorSheet: View {
     @State private var submitError: String?
     @State private var submitting = false
 
+    /// A project MCP being edited in its own file; `nil` adds a global MCP.
+    let editing: MCPEntry?
+
+    init(editing: MCPEntry? = nil) {
+        self.editing = editing
+        guard let entry = editing else { return }
+        _name = State(initialValue: entry.name)
+        _bearerEnvVar = State(initialValue: entry.config.bearerTokenEnvVar ?? "")
+        switch entry.config.transport {
+        case let .stdio(command, args, env):
+            _kind = State(initialValue: .stdio)
+            _command = State(initialValue: command)
+            _argsText = State(initialValue: args.joined(separator: "\n"))
+            _envText = State(initialValue: env.keys.sorted().map { "\($0)=\(env[$0]!)" }.joined(separator: "\n"))
+        case let .http(url, headers), let .sse(url, headers):
+            if case .sse = entry.config.transport { _kind = State(initialValue: .sse) } else { _kind = State(initialValue: .http) }
+            _url = State(initialValue: url)
+            _headersText = State(initialValue: headers.keys.sorted().map { "\($0): \(headers[$0]!)" }.joined(separator: "\n"))
+        }
+    }
+
+    /// Codex has no SSE transport, so a Codex entry can't switch to it.
+    private var kinds: [Kind] {
+        editing?.client == .codex ? [.stdio, .http] : Kind.allCases
+    }
+
     private var targets: Set<MCPClient> {
         var set: Set<MCPClient> = []
         if toClaude { set.insert(.claude) }
@@ -41,10 +67,10 @@ struct ServerEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Add MCP")
+                Text(editing.map { "Edit \($0.name)" } ?? "Add MCP")
                     .font(Theme.headline)
                     .foregroundStyle(Theme.heading)
-                Text("Written to Claude and Codex together, so both CLIs see the same server.")
+                Text(subtitle)
                     .font(.system(size: 12))
                     .foregroundStyle(Theme.mutedStrong)
             }
@@ -55,9 +81,9 @@ struct ServerEditorSheet: View {
                     nameField
                     transportPicker
                     if kind == .stdio { stdioFields } else { remoteFields }
-                    targetToggles
+                    if editing == nil { targetToggles }
                     if let submitError {
-                        Banner(title: "Couldn't add", message: submitError, tone: .red)
+                        Banner(title: editing == nil ? "Couldn't add" : "Couldn't save", message: submitError, tone: .red)
                     }
                 }
                 .padding(16)
@@ -68,7 +94,7 @@ struct ServerEditorSheet: View {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.orc(.secondary))
                     .keyboardShortcut(.cancelAction)
-                Button(submitting ? "Adding…" : primaryLabel) { submit() }
+                Button(submitting ? (editing == nil ? "Adding…" : "Saving…") : primaryLabel) { submit() }
                     .buttonStyle(.orc(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSubmit)
@@ -92,7 +118,8 @@ struct ServerEditorSheet: View {
             if nameTouched, let nameIssue {
                 FieldMessage(text: nameIssue)
             } else {
-                FieldMessage(text: "Letters, digits, - or _. Used as the key in both configs.", tone: .neutral)
+                FieldMessage(text: editing == nil ? "Letters, digits, - or _. Used as the key in both configs."
+                                                  : "Letters, digits, - or _. Used as the key in this file.", tone: .neutral)
             }
         }
     }
@@ -101,7 +128,7 @@ struct ServerEditorSheet: View {
         VStack(alignment: .leading, spacing: 4) {
             SectionLabel("Transport")
             Picker("Transport", selection: $kind) {
-                ForEach(Kind.allCases) { Text($0.label).tag($0) }
+                ForEach(kinds) { Text($0.label).tag($0) }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
@@ -184,6 +211,12 @@ struct ServerEditorSheet: View {
     private var nameIssue: String? {
         if trimmedName.isEmpty { return "Enter a name." }
         if let message = MCPManager.validateName(trimmedName) { return message }
+        if let entry = editing {
+            let taken = model.projectEntries.contains {
+                $0.name == trimmedName && $0.name != entry.name && $0.sourcePath == entry.sourcePath && $0.scope == entry.scope
+            }
+            return taken ? "This file already has an MCP called “\(trimmedName)”." : nil
+        }
         if let existing = model.globals.first(where: { $0.name == trimmedName }) {
             return "\(clientList(existing.clients)) already \(existing.clients.count > 1 ? "have" : "has") an MCP called “\(trimmedName)”."
         }
@@ -221,10 +254,16 @@ struct ServerEditorSheet: View {
     }
 
     private var canSubmit: Bool {
-        !submitting && nameIssue == nil && transportIssue == nil && !targets.isEmpty
+        !submitting && nameIssue == nil && transportIssue == nil && (editing != nil || !targets.isEmpty)
+    }
+
+    private var subtitle: String {
+        guard let entry = editing else { return "Written to Claude and Codex together, so both CLIs see the same server." }
+        return "Saved to \(abbreviate(URL(fileURLWithPath: entry.sourcePath))) · \(entry.scope.label)"
     }
 
     private var primaryLabel: String {
+        if editing != nil { return "Save" }
         switch (targets.contains(.claude), targets.contains(.codex)) {
         case (true, true): return "Add to Claude & Codex"
         case (true, false): return "Add to Claude"
@@ -283,11 +322,18 @@ struct ServerEditorSheet: View {
         submitting = true
         submitError = nil
         let name = trimmedName
-        let config = buildConfig()
+        var config = buildConfig()
         let targets = self.targets
+        let editing = self.editing
         Task {
             do {
-                try await model.add(name: name, config: config, to: targets)
+                if let entry = editing {
+                    // The sheet has no enabled toggle; keep whatever the file had.
+                    config.enabled = entry.config.enabled
+                    try await model.updateProjectEntry(entry, name: name, config: config)
+                } else {
+                    try await model.add(name: name, config: config, to: targets)
+                }
                 dismiss()
             } catch {
                 submitError = AppModel.message(error)
