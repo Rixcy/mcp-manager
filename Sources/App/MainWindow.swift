@@ -11,9 +11,10 @@ struct MainWindow: View {
         } detail: {
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // The detail toolbar holds no items, so the page header moves up
+                // into its band instead of sitting below an empty strip.
+                .ignoresSafeArea(.container, edges: .top)
                 .background(Theme.bg.ignoresSafeArea())
-                // The detail toolbar holds no items, so a visible background
-                // draws an empty bar above the page header.
                 .toolbarBackground(.hidden, for: .windowToolbar)
         }
         .frame(minWidth: 860, minHeight: 560)
@@ -26,7 +27,7 @@ struct MainWindow: View {
 
     private var sidebar: some View {
         let ranked = model.rankedProjects(query)
-        return List(selection: $model.route) {
+        return List {
             Section {
                 HStack(spacing: 8) {
                     Image(systemName: "point.3.connected.trianglepath.dotted")
@@ -40,7 +41,7 @@ struct MainWindow: View {
                             .accessibilityLabel("\(model.globals.count) global MCPs")
                     }
                 }
-                .tag(Route.globals)
+                .sidebarRow(.globals, selection: $model.route)
             } header: {
                 SectionLabel("Global MCPs")
             }
@@ -48,17 +49,14 @@ struct MainWindow: View {
             Section {
                 OrcTextField(label: "Search projects", placeholder: "Search projects", text: $query)
                     .onSubmit { if let first = ranked.first { model.open(first) } }
-                    .selectionDisabled()
                 if model.hasLoaded, model.projects.isEmpty {
                     FieldMessage(text: "No projects found in Claude or Codex config.", tone: .neutral)
-                        .selectionDisabled()
                 } else if ranked.isEmpty {
                     FieldMessage(text: "No project matches “\(query)”.", tone: .neutral)
-                        .selectionDisabled()
                 }
                 ForEach(ranked) { project in
                     ProjectRow(project: project)
-                        .tag(Route.project(project.path))
+                        .sidebarRow(.project(project.path), selection: $model.route)
                 }
             } header: {
                 HStack {
@@ -99,5 +97,23 @@ struct MainWindow: View {
         case .globals, nil:
             GlobalServersView()
         }
+    }
+}
+
+private extension View {
+    /// Draws the selected row in Orc's neutral chip colour. A `List(selection:)`
+    /// sidebar paints selection in the user's macOS accent colour instead.
+    func sidebarRow(_ route: Route, selection: Binding<Route?>) -> some View {
+        let isSelected = selection.wrappedValue == route
+        return Button { selection.wrappedValue = route } label: {
+            self.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Theme.chip : .clear)
+                .padding(.horizontal, 10)
+        )
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
