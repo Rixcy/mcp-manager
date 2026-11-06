@@ -325,7 +325,6 @@ func clientList(_ clients: some Collection<MCPClient>) -> String {
     }
 }
 
-/// Monospaced, selectable text on the code background, with an optional Copy button.
 struct CodeBlock: View {
     let text: String
     var copyLabel: String? = "Copy"
@@ -373,7 +372,6 @@ func copyToPasteboard(_ text: String) {
     NSPasteboard.general.setString(text, forType: .string)
 }
 
-/// A live server's connection state, in words.
 struct InspectorStatusChip: View {
     @ObservedObject var inspector: InspectorModel
 
@@ -383,7 +381,6 @@ struct InspectorStatusChip: View {
     }
 }
 
-/// Title, one line of explanation and an optional action, for empty tabs and lists.
 struct EmptyStateView: View {
     let title: String
     let message: String

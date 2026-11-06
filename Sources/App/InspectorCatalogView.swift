@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// List on the left, the selected item on the right; shared by Resources and Prompts.
 private struct CatalogSplit<Items: View, Detail: View>: View {
     @ViewBuilder let list: Items
     @ViewBuilder let detail: Detail

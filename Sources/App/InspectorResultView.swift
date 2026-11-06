@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// One finished tool call: the tool's result, or why the call failed.
 struct CallOutcomeView: View {
     let record: CallRecord
 
@@ -55,7 +54,6 @@ struct ToolResultView: View {
     }
 }
 
-/// One `MCPContent` block from a tool result or prompt message.
 struct ContentBlockView: View {
     let content: MCPContent
 

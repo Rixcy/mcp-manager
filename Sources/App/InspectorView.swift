@@ -1,6 +1,5 @@
 import SwiftUI
 
-/// One server's page: header band, the connection error, tabs and the selected tab.
 struct InspectorView: View {
     @EnvironmentObject private var model: AppModel
     @ObservedObject var inspector: InspectorModel
@@ -229,7 +228,6 @@ struct InspectorPane<Content: View>: View {
     }
 }
 
-/// Shown on tabs that need a live connection.
 struct NotConnectedState: View {
     @ObservedObject var inspector: InspectorModel
     let what: String

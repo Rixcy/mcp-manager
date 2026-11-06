@@ -33,7 +33,6 @@ func thrownError(file: StaticString = #fileID, line: UInt = #line, _ body: () as
     }
 }
 
-/// Absolute path of a file in `Tests/Fixtures`.
 func fixturePath(_ name: String) -> String {
     URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("Fixtures/\(name)").path
 }

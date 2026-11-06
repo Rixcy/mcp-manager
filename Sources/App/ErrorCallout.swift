@@ -1,7 +1,5 @@
 import SwiftUI
 
-/// A `HelpfulError` in full: what went wrong, what to try, the technical
-/// details on request, and buttons for the fixes the error points at.
 struct ErrorCallout: View {
     let error: HelpfulError
     /// Shown whenever given; the caller knows whether sign-in applies.

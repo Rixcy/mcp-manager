@@ -292,7 +292,6 @@ public struct MCPTool: Identifiable, Equatable, Sendable {
     }
 }
 
-/// One page of a paginated list result.
 public struct MCPPage<Item: Equatable & Sendable>: Equatable, Sendable {
     public var items: [Item]
     public var nextCursor: String?

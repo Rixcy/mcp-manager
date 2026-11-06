@@ -92,7 +92,6 @@ struct KeyValueEditor: View {
     }
 }
 
-/// A text field that masks its value until `revealed`.
 struct SecretField: View {
     let label: String
     var placeholder = ""

@@ -145,7 +145,6 @@ private final class LogBuffer: @unchecked Sendable {
     }
 }
 
-/// One server's page: its connection, tools, catalog, logs and variables.
 /// Lives in `AppModel` by target key so a session survives page changes.
 @MainActor
 final class InspectorModel: ObservableObject, Identifiable {
