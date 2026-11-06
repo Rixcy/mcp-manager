@@ -68,29 +68,41 @@ public final class KeychainCredentialStore: OAuthCredentialStore, @unchecked Sen
 
     private static let account = "credentials"
     private static let lock = NSLock()
+    /// Every HTTP request asks for its token. Reading the item each time would
+    /// re-prompt after a rebuild whenever the user picked Allow over Always Allow.
+    nonisolated(unsafe) private static var cache: [String: [String: OAuthCredential]] = [:]
 
     public init(service: String = "com.rickbooth.mcp-manager.oauth") {
         self.service = service
     }
 
     public func credential(for resource: String) throws -> OAuthCredential? {
-        try Self.lock.withLock { try load()[resource] }
+        try Self.lock.withLock { try cached()[resource] }
     }
 
     public func save(_ credential: OAuthCredential) throws {
         try Self.lock.withLock {
-            var credentials = try load()
+            var credentials = try cached()
             credentials[credential.resource] = credential
             try write(credentials)
+            Self.cache[service] = credentials
         }
     }
 
     public func deleteCredential(for resource: String) throws {
         try Self.lock.withLock {
-            var credentials = try load()
+            var credentials = try cached()
             guard credentials.removeValue(forKey: resource) != nil else { return }
             try write(credentials)
+            Self.cache[service] = credentials
         }
+    }
+
+    private func cached() throws -> [String: OAuthCredential] {
+        if let credentials = Self.cache[service] { return credentials }
+        let credentials = try load()
+        Self.cache[service] = credentials
+        return credentials
     }
 
     private var itemQuery: [String: Any] {
