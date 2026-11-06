@@ -46,6 +46,17 @@ struct MainWindow: View {
                 SectionLabel("Global MCPs")
             }
 
+            if !model.inspectorOrder.isEmpty {
+                Section {
+                    ForEach(model.orderedInspectors) { inspector in
+                        ConnectionRow(inspector: inspector)
+                            .sidebarRow(.server(inspector.key), selection: $model.route)
+                    }
+                } header: {
+                    SectionLabel("Connections")
+                }
+            }
+
             Section {
                 OrcTextField(label: "Search projects", placeholder: "Search projects", text: $query)
                     .onSubmit { if let first = ranked.first { model.open(first) } }
@@ -94,6 +105,19 @@ struct MainWindow: View {
             if let project = model.selectedProject {
                 ProjectDetailView(project: project)
             }
+        case let .server(key):
+            if let inspector = model.inspector(forKey: key) {
+                InspectorView(inspector: inspector)
+                    .id(key)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    EmptyStateView(title: "This server is no longer configured",
+                                   message: "It was removed or renamed in its config file.",
+                                   actionTitle: "Back to Global MCPs", action: { model.route = .globals })
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
         case .globals, nil:
             GlobalServersView()
         }
@@ -115,5 +139,28 @@ private extension View {
                 .padding(.horizontal, 10)
         )
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
+private struct ConnectionRow: View {
+    @ObservedObject var inspector: InspectorModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(inspector.target.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.heading)
+                    .lineLimit(1)
+                Spacer(minLength: 4)
+                Chip(text: inspector.statusText, tone: inspector.statusTone)
+            }
+            Text(inspector.target.locationLabel)
+                .font(.system(size: 11))
+                .foregroundStyle(Theme.mutedStrong)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
+        .accessibilityElement(children: .combine)
     }
 }

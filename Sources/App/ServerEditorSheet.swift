@@ -20,9 +20,9 @@ struct ServerEditorSheet: View {
     @State private var kind: Kind = .stdio
     @State private var command = ""
     @State private var argsText = ""
-    @State private var envText = ""
+    @State private var envRows: [KeyValueRow] = []
     @State private var url = ""
-    @State private var headersText = ""
+    @State private var headerRows: [KeyValueRow] = []
     @State private var bearerEnvVar = ""
     @State private var toClaude = true
     @State private var toCodex = true
@@ -31,30 +31,43 @@ struct ServerEditorSheet: View {
     @State private var submitError: String?
     @State private var submitting = false
 
-    /// A project MCP being edited in its own file; `nil` adds a global MCP.
+    /// A project MCP being edited in its own file.
     let editing: MCPEntry?
+    /// A global MCP being edited in every client that has it.
+    let editingGlobal: GlobalServer?
 
-    init(editing: MCPEntry? = nil) {
+    /// With neither `editing` nor `editingGlobal`, the sheet adds a global MCP.
+    init(editing: MCPEntry? = nil, editingGlobal: GlobalServer? = nil) {
         self.editing = editing
-        guard let entry = editing else { return }
-        _name = State(initialValue: entry.name)
-        _bearerEnvVar = State(initialValue: entry.config.bearerTokenEnvVar ?? "")
-        switch entry.config.transport {
+        self.editingGlobal = editingGlobal
+        if let entry = editing {
+            prefill(name: entry.name, config: entry.config)
+        } else if let server = editingGlobal, let config = server.primaryConfig {
+            prefill(name: server.name, config: config)
+        }
+    }
+
+    private mutating func prefill(name: String, config: MCPServerConfig) {
+        _name = State(initialValue: name)
+        _bearerEnvVar = State(initialValue: config.bearerTokenEnvVar ?? "")
+        switch config.transport {
         case let .stdio(command, args, env):
             _kind = State(initialValue: .stdio)
             _command = State(initialValue: command)
             _argsText = State(initialValue: args.joined(separator: "\n"))
-            _envText = State(initialValue: env.keys.sorted().map { "\($0)=\(env[$0]!)" }.joined(separator: "\n"))
+            _envRows = State(initialValue: KeyValueRow.rows(env))
         case let .http(url, headers), let .sse(url, headers):
-            if case .sse = entry.config.transport { _kind = State(initialValue: .sse) } else { _kind = State(initialValue: .http) }
+            if case .sse = config.transport { _kind = State(initialValue: .sse) } else { _kind = State(initialValue: .http) }
             _url = State(initialValue: url)
-            _headersText = State(initialValue: headers.keys.sorted().map { "\($0): \(headers[$0]!)" }.joined(separator: "\n"))
+            _headerRows = State(initialValue: KeyValueRow.rows(headers))
         }
     }
 
-    /// Codex has no SSE transport, so a Codex entry can't switch to it.
+    private var isEditing: Bool { editing != nil || editingGlobal != nil }
+
+    /// Codex has no SSE transport, so a server Codex holds can't switch to it.
     private var kinds: [Kind] {
-        editing?.client == .codex ? [.stdio, .http] : Kind.allCases
+        editing?.client == .codex || editingGlobal?.codex != nil ? [.stdio, .http] : Kind.allCases
     }
 
     private var targets: Set<MCPClient> {
@@ -67,7 +80,7 @@ struct ServerEditorSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(editing.map { "Edit \($0.name)" } ?? "Add MCP")
+                Text(title)
                     .font(Theme.headline)
                     .foregroundStyle(Theme.heading)
                 Text(subtitle)
@@ -81,9 +94,9 @@ struct ServerEditorSheet: View {
                     nameField
                     transportPicker
                     if kind == .stdio { stdioFields } else { remoteFields }
-                    if editing == nil { targetToggles }
+                    if !isEditing { targetToggles }
                     if let submitError {
-                        Banner(title: editing == nil ? "Couldn't add" : "Couldn't save", message: submitError, tone: .red)
+                        Banner(title: isEditing ? "Couldn't save" : "Couldn't add", message: submitError, tone: .red)
                     }
                 }
                 .padding(16)
@@ -94,7 +107,7 @@ struct ServerEditorSheet: View {
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.orc(.secondary))
                     .keyboardShortcut(.cancelAction)
-                Button(submitting ? (editing == nil ? "Adding…" : "Saving…") : primaryLabel) { submit() }
+                Button(submitting ? (isEditing ? "Saving…" : "Adding…") : primaryLabel) { submit() }
                     .buttonStyle(.orc(.primary))
                     .keyboardShortcut(.defaultAction)
                     .disabled(!canSubmit)
@@ -149,9 +162,8 @@ struct ServerEditorSheet: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 SectionLabel("Environment")
-                OrcTextEditor(label: "Environment variables, KEY=value per line", placeholder: "API_KEY=…",
-                              text: $envText, invalid: envIssue != nil)
-                FieldMessage(text: envIssue ?? "KEY=value, one per line.", tone: envIssue == nil ? .neutral : .red)
+                KeyValueEditor(rows: $envRows, keyLabel: "Variable name", keyPlaceholder: "API_KEY",
+                               valuePlaceholder: "value", addLabel: "Add variable", issues: envIssues)
             }
         }
     }
@@ -166,9 +178,8 @@ struct ServerEditorSheet: View {
             }
             VStack(alignment: .leading, spacing: 4) {
                 SectionLabel("Headers")
-                OrcTextEditor(label: "Headers, Name: value per line", placeholder: "X-Team: platform",
-                              text: $headersText, invalid: headersIssue != nil)
-                FieldMessage(text: headersIssue ?? "Name: value, one per line.", tone: headersIssue == nil ? .neutral : .red)
+                KeyValueEditor(rows: $headerRows, keyLabel: "Header name", keyPlaceholder: "X-Team",
+                               valuePlaceholder: "value", addLabel: "Add header", issues: headerIssues)
             }
             if kind == .http {
                 VStack(alignment: .leading, spacing: 4) {
@@ -217,14 +228,23 @@ struct ServerEditorSheet: View {
             }
             return taken ? "This file already has an MCP called “\(trimmedName)”." : nil
         }
-        if let existing = model.globals.first(where: { $0.name == trimmedName }) {
+        if let existing = model.globals.first(where: { $0.name == trimmedName }), existing.name != editingGlobal?.name {
             return "\(clientList(existing.clients)) already \(existing.clients.count > 1 ? "have" : "has") an MCP called “\(trimmedName)”."
         }
         return nil
     }
 
-    private var envIssue: String? { parsePairs(envText, separator: "=", what: "KEY=value", keyCheck: isEnvName).issue }
-    private var headersIssue: String? { parsePairs(headersText, separator: ":", what: "Name: value", keyCheck: nil).issue }
+    private var envIssues: [UUID: String] {
+        KeyValueRow.issues(envRows, keyCheck: KeyValueRow.isEnvName,
+                           invalidMessage: "use letters, digits and _, not starting with a digit.")
+    }
+
+    private var headerIssues: [UUID: String] {
+        KeyValueRow.issues(headerRows, keyCheck: nil, invalidMessage: "")
+    }
+
+    private var envIssue: String? { envIssues.isEmpty ? nil : "Fix the environment variables above." }
+    private var headersIssue: String? { headerIssues.isEmpty ? nil : "Fix the headers above." }
 
     private var urlIssue: String? {
         let value = url.trimmingCharacters(in: .whitespaces)
@@ -254,16 +274,27 @@ struct ServerEditorSheet: View {
     }
 
     private var canSubmit: Bool {
-        !submitting && nameIssue == nil && transportIssue == nil && (editing != nil || !targets.isEmpty)
+        !submitting && nameIssue == nil && transportIssue == nil && (isEditing || !targets.isEmpty)
+    }
+
+    private var title: String {
+        if let name = editing?.name ?? editingGlobal?.name { return "Edit \(name)" }
+        return "Add MCP"
     }
 
     private var subtitle: String {
-        guard let entry = editing else { return "Written to Claude and Codex together, so both CLIs see the same server." }
-        return "Saved to \(abbreviate(URL(fileURLWithPath: entry.sourcePath))) · \(entry.scope.label)"
+        if let entry = editing {
+            return "Saved to \(abbreviate(URL(fileURLWithPath: entry.sourcePath))) · \(entry.scope.label)"
+        }
+        if let server = editingGlobal {
+            let files = server.clients.map { abbreviate($0 == .claude ? model.paths.claudeJSON : model.paths.codexTOML) }
+            return "Saved to \(files.joined(separator: " and ")). Settings MCP Manager doesn't show are kept."
+        }
+        return "Written to Claude and Codex together, so both CLIs see the same server."
     }
 
     private var primaryLabel: String {
-        if editing != nil { return "Save" }
+        if isEditing { return "Save" }
         switch (targets.contains(.claude), targets.contains(.codex)) {
         case (true, true): return "Add to Claude & Codex"
         case (true, false): return "Add to Claude"
@@ -273,7 +304,7 @@ struct ServerEditorSheet: View {
     }
 
     private func isEnvName(_ value: String) -> Bool {
-        value.range(of: "^[A-Za-z_][A-Za-z0-9_]*$", options: .regularExpression) != nil
+        KeyValueRow.isEnvName(value)
     }
 
     private func lines(_ text: String) -> [String] {
@@ -282,29 +313,12 @@ struct ServerEditorSheet: View {
             .filter { !$0.isEmpty }
     }
 
-    private func parsePairs(_ text: String, separator: Character, what: String,
-                            keyCheck: ((String) -> Bool)?) -> (pairs: [String: String], issue: String?) {
-        var pairs: [String: String] = [:]
-        for (index, line) in lines(text).enumerated() {
-            guard let split = line.firstIndex(of: separator) else {
-                return ([:], "Line \(index + 1) needs \(what).")
-            }
-            let key = line[..<split].trimmingCharacters(in: .whitespaces)
-            let value = line[line.index(after: split)...].trimmingCharacters(in: .whitespaces)
-            if key.isEmpty || keyCheck?(key) == false {
-                return ([:], "Line \(index + 1): “\(key)” is not a valid name.")
-            }
-            pairs[key] = value
-        }
-        return (pairs, nil)
-    }
-
     private func buildConfig() -> MCPServerConfig {
-        let headers = parsePairs(headersText, separator: ":", what: "", keyCheck: nil).pairs
+        let headers = KeyValueRow.pairs(headerRows)
         let trimmedURL = url.trimmingCharacters(in: .whitespaces)
         switch kind {
         case .stdio:
-            let env = parsePairs(envText, separator: "=", what: "", keyCheck: isEnvName).pairs
+            let env = KeyValueRow.pairs(envRows)
             return MCPServerConfig(transport: .stdio(command: command.trimmingCharacters(in: .whitespaces),
                                                      args: lines(argsText), env: env))
         case .http:
@@ -325,9 +339,12 @@ struct ServerEditorSheet: View {
         var config = buildConfig()
         let targets = self.targets
         let editing = self.editing
+        let editingGlobal = self.editingGlobal
         Task {
             do {
-                if let entry = editing {
+                if let server = editingGlobal {
+                    try await model.updateGlobal(server.name, to: name, config: config)
+                } else if let entry = editing {
                     // The sheet has no enabled toggle; keep whatever the file had.
                     config.enabled = entry.config.enabled
                     try await model.updateProjectEntry(entry, name: name, config: config)

@@ -4,6 +4,8 @@ import SwiftUI
 enum Route: Hashable {
     case globals
     case project(String)
+    /// A server page, by `MCPServerTarget.key`.
+    case server(String)
 }
 
 @MainActor
@@ -30,12 +32,27 @@ final class AppModel: ObservableObject {
     @Published private(set) var isWriting = false
     @Published var isAddingServer = false
 
+    /// Live server pages by target key, kept while navigating so sessions survive page changes.
+    @Published private(set) var inspectors: [String: InspectorModel] = [:]
+    /// Keys in the order the servers were first opened, for the sidebar.
+    @Published private(set) var inspectorOrder: [String] = []
+    /// Where each server page's Back button goes.
+    private var returnRoutes: [String: Route] = [:]
+
+    @Published private(set) var shell: ShellEnvironment?
+    @Published private(set) var isResolvingShell = false
+    private var shellTask: Task<ShellEnvironment, Never>?
+
+    let oauth: OAuthClient
+
     private var watchers: [FileWatcher] = []
     private var refreshTask: Task<Void, Never>?
     private var keyWindowObserver: NSObjectProtocol?
+    private var terminateObserver: NSObjectProtocol?
 
     init(manager: MCPManager = MCPManager(paths: .live())) {
         self.manager = manager
+        oauth = OAuthClient(store: OAuthCredentialStores.standard(for: manager.paths))
         let onChange: @Sendable () -> Void = { [weak self] in
             Task { @MainActor in self?.scheduleRefresh() }
         }
@@ -44,6 +61,13 @@ final class AppModel: ObservableObject {
         keyWindowObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
         ) { _ in onChange() }
+        // Stdio servers run in their own process groups, so they outlive the app unless stopped here.
+        terminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MCPChildProcesses.terminateAll()
+            MainActor.assumeIsolated { self?.inspectors.values.forEach { $0.flushLog() } }
+        }
         scheduleRefresh(delay: .zero)
     }
 
@@ -72,9 +96,11 @@ final class AppModel: ObservableObject {
         }
         self.projects = projects
         hasLoaded = true
+        if case .success = loaded { syncGlobalInspectors() }
         if let project = selectedProject {
             await loadEntries(for: project)
         }
+        await syncProjectInspectors()
     }
 
     func rankedProjects(_ query: String) -> [ProjectRef] {
@@ -111,10 +137,133 @@ final class AppModel: ObservableObject {
         case let .success(entries):
             projectEntries = entries
             projectError = nil
+            syncInspectors(in: project, entries: entries)
         case let .failure(error):
             projectEntries = []
             projectError = Self.message(error)
         }
+    }
+
+    // MARK: Server pages
+
+    func inspect(_ target: MCPServerTarget) {
+        let inspector = inspector(for: target)
+        if let route, !isServerRoute(route) { returnRoutes[inspector.key] = route }
+        route = .server(inspector.key)
+    }
+
+    private func inspector(for target: MCPServerTarget) -> InspectorModel {
+        if let existing = inspectors[target.key] {
+            existing.update(target: target)
+            return existing
+        }
+        let inspector = InspectorModel(target: target, paths: paths, oauth: oauth) { [weak self] in
+            guard let self else { return await ShellEnvironment.resolve() }
+            return await self.shellEnvironment()
+        }
+        inspectors[target.key] = inspector
+        inspectorOrder.append(target.key)
+        return inspector
+    }
+
+    func inspector(forKey key: String) -> InspectorModel? {
+        inspectors[key]
+    }
+
+    var orderedInspectors: [InspectorModel] {
+        inspectorOrder.compactMap { inspectors[$0] }
+    }
+
+    private func isServerRoute(_ route: Route) -> Bool {
+        if case .server = route { return true }
+        return false
+    }
+
+    private func defaultReturnRoute(_ key: String) -> Route {
+        if let path = inspectors[key]?.target.projectPath { return .project(path) }
+        return .globals
+    }
+
+    func backLabel(for key: String) -> String {
+        switch returnRoutes[key] ?? defaultReturnRoute(key) {
+        case let .project(path): return (path as NSString).lastPathComponent
+        case .globals, .server: return "Global MCPs"
+        }
+    }
+
+    func leaveServerPage(_ key: String) {
+        route = returnRoutes[key] ?? defaultReturnRoute(key)
+    }
+
+    private func dropInspector(_ key: String) {
+        guard let inspector = inspectors.removeValue(forKey: key) else { return }
+        inspector.shutdown()
+        inspectorOrder.removeAll { $0 == key }
+        if route == .server(key) { route = returnRoutes[key] ?? defaultReturnRoute(key) }
+        returnRoutes[key] = nil
+    }
+
+    private func syncGlobalInspectors() {
+        let byName = Dictionary(globals.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        for (key, inspector) in inspectors {
+            guard case .global = inspector.target.origin else { continue }
+            if let server = byName[inspector.target.name], let target = MCPServerTarget.global(server) {
+                inspector.update(target: target)
+            } else {
+                dropInspector(key)
+            }
+        }
+    }
+
+    private func syncInspectors(in project: ProjectRef, entries: [MCPEntry]) {
+        let targets = Dictionary(entries.map { MCPServerTarget.project($0) }.map { ($0.key, $0) },
+                                 uniquingKeysWith: { first, _ in first })
+        for (key, inspector) in inspectors {
+            guard case .project = inspector.target.origin, inspector.target.projectPath == project.path else { continue }
+            if let target = targets[key] {
+                inspector.update(target: target)
+            } else {
+                dropInspector(key)
+            }
+        }
+    }
+
+    /// Project pages are kept current even while their project is not the one on screen.
+    private func syncProjectInspectors() async {
+        let paths = Set(inspectors.values.compactMap { inspector -> String? in
+            guard case .project = inspector.target.origin else { return nil }
+            return inspector.target.projectPath
+        })
+        let manager = self.manager
+        for path in paths where path != selectedProject?.path {
+            let project = ProjectRef(path: path)
+            let result = await Task.detached(priority: .utility) { Result { try manager.projectMCPs(project) } }.value
+            if case let .success(entries) = result { syncInspectors(in: project, entries: entries) }
+        }
+    }
+
+    // MARK: Shell environment
+
+    /// Resolving runs the login shell and can take seconds, so it happens once and is shared.
+    func shellEnvironment() async -> ShellEnvironment {
+        if let shell { return shell }
+        if let shellTask { return await shellTask.value }
+        let task = Task.detached(priority: .userInitiated) { await ShellEnvironment.resolve() }
+        shellTask = task
+        isResolvingShell = true
+        let value = await task.value
+        if shellTask == task {
+            shell = value
+            shellTask = nil
+            isResolvingShell = false
+        }
+        return value
+    }
+
+    func reloadShellEnvironment() {
+        shell = nil
+        shellTask = nil
+        Task { _ = await shellEnvironment() }
     }
 
     // MARK: Writes
@@ -152,6 +301,12 @@ final class AppModel: ObservableObject {
     func updateProjectEntry(_ entry: MCPEntry, name: String, config: MCPServerConfig) async throws {
         _ = try await write { try $0.updateProjectEntry(entry, name: name, config: config); return WriteReport(written: [entry.client]) }
         lastNotice = "Saved \(name) in \(abbreviate(URL(fileURLWithPath: entry.sourcePath)))."
+    }
+
+    /// Throws so the editor sheet can show the failure inline.
+    func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig) async throws {
+        let report = try await write { try $0.updateGlobal(name, to: newName, config: config) }
+        lastNotice = Self.describe(report, done: "Saved \(newName) in", nothing: "\(name) was not changed.")
     }
 
     func sync(_ name: String) async {

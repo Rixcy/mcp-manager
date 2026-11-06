@@ -3,6 +3,7 @@ import SwiftUI
 struct GlobalServersView: View {
     @EnvironmentObject private var model: AppModel
     @State private var renaming: GlobalServer?
+    @State private var editing: GlobalServer?
     @State private var removing: GlobalServer?
 
     var body: some View {
@@ -20,6 +21,10 @@ struct GlobalServersView: View {
         }
         .sheet(item: $renaming) { server in
             RenameSheet(server: server)
+                .environmentObject(model)
+        }
+        .sheet(item: $editing) { server in
+            ServerEditorSheet(editingGlobal: server)
                 .environmentObject(model)
         }
         .confirmationDialog(
@@ -83,7 +88,8 @@ struct GlobalServersView: View {
             VStack(spacing: 0) {
                 ForEach(Array(model.globals.enumerated()), id: \.element.id) { index, server in
                     if index > 0 { Hairline() }
-                    GlobalServerRow(server: server, onRename: { renaming = server }, onRemove: { removing = server })
+                    GlobalServerRow(server: server, onEdit: { editing = server }, onRename: { renaming = server },
+                                    onRemove: { removing = server })
                 }
             }
             .orcPanel()
@@ -124,8 +130,15 @@ struct GlobalServersView: View {
 private struct GlobalServerRow: View {
     @EnvironmentObject private var model: AppModel
     let server: GlobalServer
+    let onEdit: () -> Void
     let onRename: () -> Void
     let onRemove: () -> Void
+
+    private var target: MCPServerTarget? { MCPServerTarget.global(server) }
+
+    private func open() {
+        if let target { model.inspect(target) }
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -137,6 +150,9 @@ private struct GlobalServerRow: View {
                         .textSelection(.enabled)
                     if let kind = server.primaryConfig?.transport.kindLabel {
                         Chip(text: kind)
+                    }
+                    if let key = target?.key, let inspector = model.inspector(forKey: key) {
+                        InspectorStatusChip(inspector: inspector)
                     }
                 }
                 if let config = server.primaryConfig {
@@ -158,17 +174,25 @@ private struct GlobalServerRow: View {
                     }
                     .buttonStyle(.orc(.secondary, compact: true))
                     .help("Copy \(server.name) into \(clientList(server.missingClients))")
+                    .disabled(model.isWriting)
                 }
-                Button("Rename…", action: onRename)
+                Button("Open", action: open)
                     .buttonStyle(.orc(.secondary, compact: true))
+                    .disabled(target == nil)
+                    .help("Open \(server.name) to connect, run its tools and read its logs")
+                Button("Edit…", action: onEdit)
+                    .buttonStyle(.orc(.secondary, compact: true))
+                    .disabled(model.isWriting)
                 Button("Remove…", action: onRemove)
                     .buttonStyle(.orc(.destructive, compact: true))
+                    .disabled(model.isWriting)
             }
-            .disabled(model.isWriting)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .contextMenu {
+            Button("Open", action: open)
+            Button("Edit…", action: onEdit)
             Button("Rename…", action: onRename)
             if case let .onlyIn(_, syncable) = availability(of: server), syncable {
                 Button("Sync to \(clientList(server.missingClients))") { Task { await model.sync(server.name) } }

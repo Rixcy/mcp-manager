@@ -202,6 +202,10 @@ private struct ProjectEntryRow: View {
     let onEdit: () -> Void
     let onRemove: () -> Void
 
+    private func open() {
+        model.inspect(.project(entry))
+    }
+
     private var detailKeys: String? {
         switch entry.config.transport {
         case let .stdio(_, _, env) where !env.isEmpty:
@@ -218,17 +222,22 @@ private struct ProjectEntryRow: View {
             details
             Spacer(minLength: 8)
             HStack(spacing: 6) {
+                Button("Open", action: open)
+                    .buttonStyle(.orc(.secondary, compact: true))
+                    .help("Open \(entry.name) to connect, run its tools and read its logs")
                 Button("Edit…", action: onEdit)
                     .buttonStyle(.orc(.secondary, compact: true))
+                    .disabled(model.isWriting)
                 Button("Remove…", action: onRemove)
                     .buttonStyle(.orc(.destructive, compact: true))
+                    .disabled(model.isWriting)
             }
-            .disabled(model.isWriting)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contextMenu {
+            Button("Open", action: open)
             Button("Edit…", action: onEdit)
             Divider()
             Button("Remove…", role: .destructive, action: onRemove)
@@ -246,6 +255,9 @@ private struct ProjectEntryRow: View {
                 Chip(text: entry.config.transport.kindLabel)
                 if !entry.config.enabled {
                     Chip(text: "Disabled", tone: .yellow)
+                }
+                if let inspector = model.inspector(forKey: MCPServerTarget.project(entry).key) {
+                    InspectorStatusChip(inspector: inspector)
                 }
             }
             Text(entry.config.transport.summary)

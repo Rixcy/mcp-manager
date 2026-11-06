@@ -148,11 +148,15 @@ struct OrcTextField: View {
     @Binding var text: String
     var mono = false
     var invalid = false
+    /// Grows up to eight lines as the text wraps or gains line breaks.
+    var multiline = false
 
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField(label, text: $text, prompt: Text(placeholder).foregroundColor(Theme.muted))
+        TextField(label, text: $text, prompt: Text(placeholder).foregroundColor(Theme.muted),
+                  axis: multiline ? .vertical : .horizontal)
+            .lineLimit(multiline ? 8 : 1)
             .labelsHidden()
             .textFieldStyle(.plain)
             .font(mono ? Theme.mono() : Theme.body)
@@ -318,5 +322,89 @@ func clientList(_ clients: some Collection<MCPClient>) -> String {
     case 0: return "no client"
     case 1: return names[0]
     default: return names.dropLast().joined(separator: ", ") + " and " + names.last!
+    }
+}
+
+/// Monospaced, selectable text on the code background, with an optional Copy button.
+struct CodeBlock: View {
+    let text: String
+    var copyLabel: String? = "Copy"
+
+    var body: some View {
+        Text(text.isEmpty ? " " : text)
+            .font(Theme.mono(12))
+            .foregroundStyle(Theme.heading)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(10)
+            .padding(.trailing, copyLabel == nil ? 0 : 64)
+            .background(RoundedRectangle(cornerRadius: Theme.panelRadius).fill(Theme.code))
+            .overlay(alignment: .topTrailing) {
+                if let copyLabel {
+                    CopyButton(text: text, label: copyLabel).padding(4)
+                }
+            }
+    }
+}
+
+struct CopyButton: View {
+    let text: String
+    var label = "Copy"
+
+    @State private var copied = false
+
+    var body: some View {
+        Button(copied ? "Copied" : label) {
+            copyToPasteboard(text)
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                copied = false
+            }
+        }
+        .buttonStyle(.orc(.secondary, compact: true))
+        .help("Copy to the clipboard")
+    }
+}
+
+func copyToPasteboard(_ text: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(text, forType: .string)
+}
+
+/// A live server's connection state, in words.
+struct InspectorStatusChip: View {
+    @ObservedObject var inspector: InspectorModel
+
+    var body: some View {
+        Chip(text: inspector.statusText, tone: inspector.statusTone)
+            .accessibilityLabel("Connection: \(inspector.statusText)")
+    }
+}
+
+/// Title, one line of explanation and an optional action, for empty tabs and lists.
+struct EmptyStateView: View {
+    let title: String
+    let message: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(Theme.title)
+                .foregroundStyle(Theme.heading)
+            Text(message)
+                .font(Theme.body)
+                .foregroundStyle(Theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.orc(.primary))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .orcPanel(padding: 16)
     }
 }

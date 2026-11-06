@@ -89,6 +89,34 @@ public final class MCPManager: @unchecked Sendable {
         return WriteReport(written: holders)
     }
 
+    /// Replaces the global server's config (and optionally its name) in every
+    /// client that has it. Each client keeps its own `enabled` value and the keys
+    /// MCP Manager does not model. Everything is checked before anything is written.
+    @discardableResult
+    public func updateGlobal(_ name: String, to newName: String, config: MCPServerConfig) throws -> WriteReport {
+        if Self.validateName(newName) != nil { throw MCPManagerError.invalidName(newName) }
+        let holders = try MCPClient.allCases.filter { try names(in: $0).contains(name) }
+        guard !holders.isEmpty else { throw MCPManagerError.notFound(name: name) }
+        if newName != name {
+            for client in holders where try names(in: client).contains(newName) {
+                throw MCPManagerError.nameTaken(name: newName, client: client)
+            }
+        }
+        if holders.contains(.codex), case .sse = config.transport {
+            throw MCPManagerError.io(path: paths.codexTOML.path, detail: CodexConfigStore.sseSkipReason)
+        }
+        let current = try loadGlobal().first { $0.name == name }
+        for client in holders {
+            var own = config
+            own.enabled = current?.config(for: client)?.enabled ?? true
+            switch client {
+            case .claude: try claudeStore.update(name: name, to: newName, config: own)
+            case .codex: try codexStore.update(name: name, to: newName, config: own)
+            }
+        }
+        return WriteReport(written: holders)
+    }
+
     /// Copies a server that exists in one client into the clients missing it.
     @discardableResult
     public func sync(name: String) throws -> WriteReport {
