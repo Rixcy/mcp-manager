@@ -15,3 +15,7 @@ AGENTS.override.md
 .specstory/
 .impeccable/
 .orc/
+
+# build output
+.build/
+build/
