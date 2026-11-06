@@ -66,27 +66,22 @@ private struct InspectorHeader: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Button {
-                model.leaveServerPage(inspector.key)
-            } label: {
-                Label(model.backLabel(for: inspector.key), systemImage: "chevron.left")
-            }
-            .buttonStyle(.orc(.ghost, compact: true))
-            .keyboardShortcut("[", modifiers: .command)
-            .help("\(model.backLabel(for: inspector.key)) (⌘[)")
-            VStack(alignment: .leading, spacing: 4) {
-                Text(inspector.target.name)
-                    .font(Theme.headline)
-                    .foregroundStyle(Theme.heading)
-                    .textSelection(.enabled)
-                HStack(spacing: 4) {
-                    Chip(text: inspector.target.config.transport.kindLabel)
-                    Chip(text: inspector.target.locationLabel)
-                    InspectorStatusChip(inspector: inspector)
-                    if case let .connecting(step) = inspector.state {
-                        Text(step.label)
-                            .font(.system(size: 12))
-                            .foregroundStyle(Theme.mutedStrong)
+            // One row keeps the header short; the back button drops its text before the
+            // chips fall back to a second line under the title in narrow windows.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 12) {
+                    backButton(iconOnly: false)
+                    inlineTitle
+                }
+                HStack(alignment: .center, spacing: 8) {
+                    backButton(iconOnly: true)
+                    inlineTitle
+                }
+                HStack(alignment: .center, spacing: 8) {
+                    backButton(iconOnly: true)
+                    VStack(alignment: .leading, spacing: 4) {
+                        title
+                        chips
                     }
                 }
             }
@@ -102,6 +97,51 @@ private struct InspectorHeader: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("MCP Manager forgets its sign-in for this server. Claude and Codex keep their own. You can sign in again at any time.")
+        }
+    }
+
+    private func backButton(iconOnly: Bool) -> some View {
+        Button {
+            model.leaveServerPage(inspector.key)
+        } label: {
+            if iconOnly {
+                Label(model.backLabel(for: inspector.key), systemImage: "chevron.left").labelStyle(.iconOnly)
+            } else {
+                Label(model.backLabel(for: inspector.key), systemImage: "chevron.left")
+            }
+        }
+        .buttonStyle(.orc(.ghost, compact: true))
+        .keyboardShortcut("[", modifiers: .command)
+        .help("\(model.backLabel(for: inspector.key)) (⌘[)")
+    }
+
+    private var inlineTitle: some View {
+        HStack(alignment: .center, spacing: 10) {
+            title.fixedSize()
+            chips
+        }
+    }
+
+    private var title: some View {
+        Text(inspector.target.name)
+            .font(Theme.headline)
+            .foregroundStyle(Theme.heading)
+            .lineLimit(1)
+            .textSelection(.enabled)
+    }
+
+    private var chips: some View {
+        HStack(spacing: 4) {
+            Chip(text: inspector.target.config.transport.kindLabel)
+            Chip(text: inspector.target.locationLabel)
+            InspectorStatusChip(inspector: inspector)
+            if case let .connecting(step) = inspector.state {
+                Text(step.label)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Theme.mutedStrong)
+                    .lineLimit(1)
+                    .fixedSize()
+            }
         }
     }
 
