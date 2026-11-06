@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# Builds a throwaway home with sample Claude and Codex configs so the app can be
+# run and screenshotted without touching the real ~/.claude.json or ~/.codex.
+set -euo pipefail
+
+HOME_DIR="${1:?usage: bin/fixture-home <dir>}"
+mkdir -p "$HOME_DIR/.codex" "$HOME_DIR/Projects/reels/.codex" "$HOME_DIR/Projects/rails" "$HOME_DIR/Projects/my-reels-app" "$HOME_DIR/Projects/dotfiles"
+P="$HOME_DIR/Projects"
+
+cat > "$HOME_DIR/.claude.json" <<JSON
+{
+  "numStartups": 42,
+  "mcpServers": {
+    "linear": { "type": "http", "url": "https://mcp.linear.app/mcp" },
+    "notion": { "type": "http", "url": "https://mcp.notion.com/mcp" },
+    "orc": { "type": "stdio", "command": "/usr/local/bin/orc-mcp", "args": ["--stdio"], "env": {} },
+    "granola": { "type": "http", "url": "https://mcp.granola.ai/mcp" }
+  },
+  "projects": {
+    "$P/reels": { "mcpServers": { "figma-desktop": { "type": "http", "url": "http://127.0.0.1:3845/mcp" } } },
+    "$P/rails": { "mcpServers": {} },
+    "$P/my-reels-app": {},
+    "$P/dotfiles": { "mcpServers": { "sentry": { "type": "http", "url": "https://mcp.sentry.dev/mcp" } } }
+  }
+}
+JSON
+
+cat > "$HOME_DIR/.codex/config.toml" <<TOML
+model = "gpt-5"
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
+
+[mcp_servers.orc]
+command = "/usr/local/bin/orc-mcp"
+args = ["--stdio"]
+
+[mcp_servers.datadog]
+url = "https://mcp.datadoghq.eu/v1/mcp"
+
+[projects."$P/reels"]
+trust_level = "trusted"
+TOML
+
+cat > "$P/reels/.mcp.json" <<JSON
+{ "mcpServers": { "playwright": { "command": "npx", "args": ["@playwright/mcp@latest"] } } }
+JSON
+
+cat > "$P/reels/.codex/config.toml" <<TOML
+[mcp_servers.supabase]
+command = "npx"
+args = ["-y", "@supabase/mcp-server-supabase", "--read-only"]
+
+[mcp_servers.supabase.env]
+SUPABASE_PROJECT_REF = "reels-dev"
+TOML
+
+echo "$HOME_DIR"
