@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 190" width="600" height="190" role="img" aria-label="mcp-manager">
+  <defs>
+    <linearGradient id="skin" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#9dc76b"/>
+      <stop offset="1" stop-color="#53743a"/>
+    </linearGradient>
+  </defs>
+
+  <!-- emblem: the orc head worn as a plug (see mcp-manager-icon.svg) -->
+  <g transform="translate(88 100)">
+    <!-- cable -->
+    <path d="M0 50 C2 72 26 76 48 70" fill="none" stroke="#256f72" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="55" cy="69" r="9" fill="#256f72" stroke="#202722" stroke-width="3"/>
+    <!-- prongs -->
+    <rect x="-22" y="-90" width="12" height="32" rx="3" fill="#c7cfca" stroke="#202722" stroke-width="3"/>
+    <rect x="10" y="-90" width="12" height="32" rx="3" fill="#c7cfca" stroke="#202722" stroke-width="3"/>
+    <circle cx="-16" cy="-82" r="2.5" fill="#202722"/>
+    <circle cx="16" cy="-82" r="2.5" fill="#202722"/>
+    <!-- ears -->
+    <path d="M-52 -14 L-78 -34 L-58 2 Z" fill="#53743a"/>
+    <path d="M52 -14 L78 -34 L58 2 Z" fill="#53743a"/>
+    <!-- head -->
+    <path d="M-54 -18
+             C-54 -52 -30 -64 0 -64
+             C30 -64 54 -52 54 -18
+             C54 10 40 30 26 40
+             C14 49 10 52 0 52
+             C-10 52 -14 49 -26 40
+             C-40 30 -54 10 -54 -18 Z"
+          fill="url(#skin)" stroke="#202722" stroke-width="4"/>
+    <!-- brow -->
+    <path d="M-40 -24 L-8 -14 L-8 -4 L-42 -12 Z" fill="#202722"/>
+    <path d="M40 -24 L8 -14 L8 -4 L42 -12 Z" fill="#202722"/>
+    <!-- eyes -->
+    <circle cx="-24" cy="0" r="6.5" fill="#eceeec"/>
+    <circle cx="24" cy="0" r="6.5" fill="#eceeec"/>
+    <circle cx="-23" cy="1" r="3" fill="#16181b"/>
+    <circle cx="25" cy="1" r="3" fill="#16181b"/>
+    <!-- nose -->
+    <path d="M0 8 L-9 24 L9 24 Z" fill="#202722"/>
+    <!-- mouth -->
+    <path d="M-16 36 Q0 44 16 36" fill="none" stroke="#202722" stroke-width="4" stroke-linecap="round"/>
+    <!-- tusks -->
+    <path d="M-16 40 L-22 14 L-9 36 Z" fill="#eceeec" stroke="#202722" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M16 40 L22 14 L9 36 Z" fill="#eceeec" stroke="#202722" stroke-width="2.5" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="172" y="116"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="48" font-weight="700">
+    <tspan fill="#53743a">/</tspan><tspan fill="#202722">mcp-manager</tspan>
+  </text>
+</svg>
