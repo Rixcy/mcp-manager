@@ -276,14 +276,14 @@ final class StdioTransport: MCPClientTransport, @unchecked Sendable {
     }
 
     private func noticeNoise(_ line: String) {
-        let redacted = LogFormatting.detail(text: line)
+        let capped = LogFormatting.detail(text: line)
         let count = state.withLock {
-            lastNoiseLine = TransportLog.clip(redacted, 1_000)
+            lastNoiseLine = TransportLog.clip(capped, 1_000)
             noiseLines += 1
             return noiseLines
         }
         if count <= Self.noiseLinesLogged {
-            log.record(.warning, "Server wrote non-JSON to stdout", detail: redacted)
+            log.record(.warning, "Server wrote non-JSON to stdout", detail: capped)
         } else if count == Self.noiseLinesLogged + 1 {
             log.record(.warning, "Server keeps writing non-JSON to stdout; further lines are not logged", detail: nil)
         }
@@ -316,13 +316,13 @@ final class StdioTransport: MCPClientTransport, @unchecked Sendable {
         var line = String(decoding: bytes, as: UTF8.self)
         if line.hasSuffix("\r") { line.removeLast() }
         guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let redacted = LogFormatting.detail(text: line)
+        let capped = LogFormatting.detail(text: line)
         state.withLock {
-            stderrTail.append(redacted)
+            stderrTail.append(capped)
             if stderrTail.count > Self.stderrTailLength { stderrTail.removeFirst() }
         }
-        let summary = TransportLog.clip(redacted)
-        log.record(.stderr, summary, detail: summary == redacted ? nil : redacted)
+        let summary = TransportLog.clip(capped)
+        log.record(.stderr, summary, detail: summary == capped ? nil : capped)
     }
 
     /// A blocking read that gives up once the server is gone, so a pipe held open by an

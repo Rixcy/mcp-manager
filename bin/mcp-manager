@@ -1,26 +1,29 @@
 #!/usr/bin/env bash
-# Command-line entry for MCP Manager. ./install.sh copies this to ~/.local/bin.
+# Command-line entry for MCP Manager, installed to ~/.local/bin by install.sh.
 set -euo pipefail
 
 APP="${MCP_MANAGER_APP:-$HOME/Applications/MCP Manager.app}"
+INSTALL_URL="${MCP_MANAGER_INSTALL_URL:-https://raw.githubusercontent.com/rixcy/mcp-manager/main/install.sh}"
 
 usage() {
-    cat <<EOF
+    cat <<USAGE
 usage: mcp-manager <command>
 
 commands:
-  open    launch MCP Manager (if needed) and show its window
+  open      launch MCP Manager (if needed) and show its window
+  update    download, rebuild and reinstall the latest version
+  version   print the installed version
 
 env:
   MCP_MANAGER_APP   app bundle to open (default: ~/Applications/MCP Manager.app)
   MCP_MANAGER_HOME  home folder the app reads configs from, applied on launch
-EOF
+USAGE
 }
 
 case "${1:-}" in
     open)
         if [[ ! -d "$APP" ]]; then
-            echo "mcp-manager: $APP not found. Run ./install.sh from the mcp-manager repo first." >&2
+            echo "mcp-manager: $APP not found. Install it with: curl -fsSL $INSTALL_URL | bash" >&2
             exit 1
         fi
         args=(-a "$APP")
@@ -30,6 +33,17 @@ case "${1:-}" in
         # The URL reaches the app whether it is already running or not, and
         # the main window scene claims it (see MCPManagerApp.swift).
         open "${args[@]}" "mcp-manager://open"
+        ;;
+    update)
+        curl -fsSL "$INSTALL_URL" | bash
+        ;;
+    version)
+        version_file="$APP/Contents/Resources/source-commit"
+        if [[ ! -f "$version_file" ]]; then
+            echo "mcp-manager: no version recorded in $APP" >&2
+            exit 1
+        fi
+        cat "$version_file"
         ;;
     -h|--help|help)
         usage

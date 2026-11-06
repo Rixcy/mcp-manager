@@ -32,7 +32,7 @@ rm -f "$BUILD"/src/*.swift
 cp "$REPO"/Sources/Core/*.swift "$REPO"/Sources/App/*.swift "$BUILD/src/"
 # The harness supplies its own entry point instead of the app's.
 sed -i '' 's/^@main$//' "$BUILD/src/MCPManagerApp.swift"
-swiftc -Onone -swift-version 5 -target arm64-apple-macos14.0 -module-name MCPManagerCapture \
+swiftc -Onone -swift-version 5 -target "$(uname -m)-apple-macos14.0" -module-name MCPManagerCapture \
     "$BUILD"/src/*.swift "$REPO/Tools/Capture/main.swift" -o "$BUILD/capture"
 
 HOME_DIR="${MCP_MANAGER_HOME:-}"
@@ -40,4 +40,6 @@ if [[ -z "$HOME_DIR" ]]; then
     HOME_DIR="$("$REPO/bin/fixture-home" "$(mktemp -d)")"
 fi
 
-"$BUILD/capture" "$HOME_DIR" "$OUT" "${CAPTURE_APPEARANCE:-light,dark}" "${SCENES[@]}"
+# The views abbreviate paths against the user's home, so make that the fixture home:
+# screenshots then show ~/.claude.json instead of a temp folder.
+CFFIXED_USER_HOME="$HOME_DIR" "$BUILD/capture" "$HOME_DIR" "$OUT" "${CAPTURE_APPEARANCE:-light,dark}" "${SCENES[@]}"

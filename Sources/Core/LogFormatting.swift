@@ -18,9 +18,24 @@ public enum LogFormatting {
         capped(redacted(value).jsonString())
     }
 
-    /// Plain text (stderr lines, HTTP bodies) capped at `maxDetailBytes`.
+    /// Plain text (stderr lines, HTTP bodies) with bearer tokens and well-known key
+    /// formats scrubbed, capped at `maxDetailBytes`.
     public static func detail(text: String) -> String {
-        capped(text)
+        capped(scrubbed(text))
+    }
+
+    private static let textSecretPatterns: [NSRegularExpression] = [
+        #"(?<=\b[Bb]earer )[A-Za-z0-9._~+/=-]+"#,
+        #"\b(?:sk-[A-Za-z0-9_-]{8,}|gh[pousr]_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[abposr]-[A-Za-z0-9-]{8,})"#,
+    ].map { try! NSRegularExpression(pattern: $0) }
+
+    static func scrubbed(_ text: String) -> String {
+        var result = text
+        for pattern in textSecretPatterns {
+            let range = NSRange(result.startIndex..., in: result)
+            result = pattern.stringByReplacingMatches(in: result, range: range, withTemplate: redactedValue)
+        }
+        return result
     }
 
     public static func redacted(_ value: JSONValue) -> JSONValue {
@@ -31,7 +46,7 @@ public enum LogFormatting {
             let type = members["type"]?.stringValue
             var result: [String: JSONValue] = [:]
             for (key, member) in members {
-                if secretKeys.contains(key.lowercased()) {
+                if isSecretKey(key, value: member) {
                     result[key] = .string(redactedValue)
                 } else if let text = member.stringValue, text.utf8.count > base64Threshold,
                           key == "blob" || (key == "data" && (type == "image" || type == "audio")) {
@@ -44,6 +59,15 @@ public enum LogFormatting {
         default:
             return value
         }
+    }
+
+    /// Exact names always; looser name matches only for string values, so `max_tokens: 100` stays.
+    static func isSecretKey(_ key: String, value: JSONValue) -> Bool {
+        let lower = key.lowercased()
+        if secretKeys.contains(lower) { return true }
+        guard value.stringValue != nil else { return false }
+        let fragments = ["token", "secret", "password", "passwd", "bearer", "credential", "private_key", "privatekey"]
+        return fragments.contains { lower.contains($0) } || lower.hasSuffix("_key") || lower.hasSuffix("-key")
     }
 
     /// Header values for logs and the UI, with credentials replaced.

@@ -5,7 +5,10 @@ set -euo pipefail
 
 HOME_DIR="${1:?usage: bin/fixture-home <dir>}"
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-DEMO_SERVER="$REPO/Tests/Fixtures/mcp_fixture_server.py"
+# A copy inside the home keeps the checkout's path out of the configs and screenshots.
+DEMO_SERVER="$HOME_DIR/.mcp-demo/server.py"
+mkdir -p "$(dirname "$DEMO_SERVER")"
+cp "$REPO/Tests/Fixtures/mcp_fixture_server.py" "$DEMO_SERVER"
 mkdir -p "$HOME_DIR/.codex" "$HOME_DIR/Projects/reels/.codex" "$HOME_DIR/Projects/rails" "$HOME_DIR/Projects/my-reels-app" "$HOME_DIR/Projects/dotfiles"
 P="$HOME_DIR/Projects"
 
@@ -15,7 +18,7 @@ cat > "$HOME_DIR/.claude.json" <<JSON
   "mcpServers": {
     "linear": { "type": "http", "url": "https://mcp.linear.app/mcp" },
     "notion": { "type": "http", "url": "https://mcp.notion.com/mcp" },
-    "orc": { "type": "stdio", "command": "/usr/local/bin/orc-mcp", "args": ["--stdio"], "env": {} },
+    "context7": { "type": "stdio", "command": "npx", "args": ["-y", "@upstash/context7-mcp"], "env": {} },
     "granola": { "type": "http", "url": "https://mcp.granola.ai/mcp" },
     "demo": { "type": "stdio", "command": "/usr/bin/python3", "args": ["$DEMO_SERVER", "--stdio"], "env": {} }
   },
@@ -34,9 +37,9 @@ model = "gpt-5"
 [mcp_servers.linear]
 url = "https://mcp.linear.app/mcp"
 
-[mcp_servers.orc]
-command = "/usr/local/bin/orc-mcp"
-args = ["--stdio"]
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
 
 [mcp_servers.datadog]
 url = "https://mcp.datadoghq.eu/v1/mcp"

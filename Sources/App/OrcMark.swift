@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// The MCP Manager emblem: the Orc head from `orc/assets/orc-logo.svg` worn as a
+/// The MCP Manager emblem: an orc head worn as a
 /// plug, with two prongs on top and a cable leaving the chin. Coordinates match
 /// `assets/mcp-manager-icon.svg` (origin at the centre of the face, y down).
 enum OrcEmblem {
@@ -105,7 +105,7 @@ enum OrcEmblem {
 }
 
 /// Full-colour emblem for headers. First-party brand art, so it may use palette
-/// hues outside their status meaning (DESIGN.md, Orc Palette Rule).
+/// hues outside their status meaning.
 struct OrcMark: View {
     var showsCable = true
 

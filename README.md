@@ -1,80 +1,55 @@
 # MCP Manager
 
-A macOS menu bar app that keeps your MCP servers in step across **Claude Code** and **Codex**. Themed with the Orc design system.
+A macOS menu bar app that keeps your MCP servers in sync across **Claude Code** and **Codex**, and lets you connect to any of them to try their tools.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/main-window-dark.png">
-  <img alt="MCP Manager main window listing global MCPs shared by Claude and Codex" src="assets/screenshots/main-window-light.png" width="800">
+  <img alt="MCP Manager listing global MCP servers shared by Claude and Codex" src="assets/screenshots/main-window-light.png" width="800">
 </picture>
 
-- **Global MCPs:** add, edit (including the name) and remove from each row's **⋯** menu. Adding writes to Claude and Codex at the same time. A server that only one client has is flagged "Claude only" or "Codex only", with a **Sync** button.
-- **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …), see every MCP configured for it, and edit or remove each one in the file it came from.
-- **MCP client:** open any server to connect to it, list its tools, call them with a generated form or raw JSON, read its resources and prompts, and read a log of every message. Works over stdio, Streamable HTTP and SSE, signs in to OAuth servers, and explains failures with the fix.
-- **Menu bar:** quick list, sync, project search, and shortcuts into the full window.
-
-## Install and open
+## Install
 
 ```sh
-./install.sh        # builds the app, installs it to ~/Applications, adds `mcp-manager` to ~/.local/bin
-mcp-manager open    # launches MCP Manager (if needed) and shows its window
-bin/test            # core tests (real temp files, no mocks)
+curl -fsSL https://raw.githubusercontent.com/rixcy/mcp-manager/main/install.sh | bash
 ```
 
-`./install.sh --build-only` stops after building `build/MCP Manager.app`. Set `MCP_MANAGER_BIN_DIR` to put the command somewhere other than `~/.local/bin`.
+Then open it with `mcp-manager open`, or from the menu bar.
 
-SwiftPM is not used. Everything compiles with plain `swiftc` (macOS 14+, Command Line Tools are enough).
+**To update**, run the same command again (or `mcp-manager update`). It only rebuilds when there's something new.
 
-To try the app without touching your real configs, point it at a throwaway home:
+Needs macOS 14+ and the Xcode Command Line Tools (`xcode-select --install`). It builds from source on your Mac, so there's nothing to notarise or unquarantine.
+
+## What it does
+
+- **Global MCPs:** add, edit and remove servers in Claude and Codex at once. A server only one of them has gets a **Sync** button.
+- **Project MCPs:** search any project Claude or Codex knows about and edit its servers in the file they came from.
+- **MCP client:** open a server to connect, run its tools from a form or raw JSON, read its resources, prompts and logs. Works over stdio, HTTP and SSE, and handles OAuth sign-in.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/server-dark.png">
+  <img alt="The demo server connected, with its tools listed and the echo tool's form open" src="assets/screenshots/server-light.png" width="800">
+</picture>
+
+## Your configs are safe
+
+- It edits `~/.claude.json`, `.mcp.json` and Codex's `config.toml` in place, keeping comments and unrelated settings.
+- Every file is backed up to `~/Library/Application Support/MCP Manager/Backups/` before a change.
+- OAuth tokens live in your login keychain. Tokens and secrets are scrubbed from the logs in `~/Library/Logs/MCP Manager/`.
+- Nothing runs until you press **Connect**.
+
+## Uninstall
 
 ```sh
-MCP_MANAGER_HOME="$(bin/fixture-home "$(mktemp -d)")" mcp-manager open
+rm -rf ~/Applications/"MCP Manager.app" ~/.local/share/mcp-manager ~/.local/bin/mcp-manager
 ```
 
-Quit any running copy first: the home is only read at launch. The fixture home has a working `demo` server to connect to, and a `reels` project server whose variable is not set.
-
-## Screenshots in the background
+## Develop
 
 ```sh
-bin/capture /tmp/shots                  # globals, project and server pages, light and dark
-bin/capture /tmp/shots server           # one page
-CAPTURE_APPEARANCE=dark bin/capture /tmp/shots globals
+./install.sh            # build and install this checkout
+bin/test                # core tests
+bin/capture /tmp/shots  # screenshot the app in the background
+MCP_MANAGER_HOME="$(bin/fixture-home "$(mktemp -d)")" mcp-manager open  # try it against sample configs
 ```
 
-`bin/capture` builds the app's real views into a small harness and screenshots them against a fresh fixture home. Nothing appears on screen and nothing takes focus: the window sits one layer below the desktop wallpaper, and `screencapture -l` reads it from there. MCP Manager.app is never launched, so your real configs and keychain are never touched. Set `MCP_MANAGER_HOME` to capture a different fixture home.
-
-It stops with an error instead of capturing if the window could be seen, the harness takes focus, or a sheet or alert opens. The terminal running it needs Screen Recording permission. Add a page by adding a case to `CaptureScene` in `Tools/Capture/main.swift`.
-
-## Use a server
-
-1. Click a global or project MCP, then **Connect**.
-2. Pick a tool, fill in its arguments (or switch to **JSON**), and press **Run** (⌘↩).
-3. Read the result, or the error and what to do about it.
-
-- **Environment:** MCP Manager reads your login shell's environment once per launch, because apps opened from the Dock or menu bar don't get the `PATH` or keys you export in `~/.zshrc`. `${VAR}` and `${VAR:-default}` in a config expand the way Claude Code expands them. Add variables a server needs under its **Environment** tab: they apply only when MCP Manager connects and are never written to Claude or Codex config.
-- **Sign in:** a remote server that answers 401 gets a **Sign in** button. MCP Manager registers itself with the server's OAuth provider, opens your browser, and keeps the tokens in your login keychain (one item, `com.rickbooth.mcp-manager.oauth`). A server with a pre-registered client in Claude's config (`oauth.clientId`, `callbackPort`) uses that client.
-- **Logs:** every message sent and received, server stderr, and connection events, per server, in `~/Library/Logs/MCP Manager/`. One JSON object per line, written in batches, rotated at 2 MB with two old files kept. Tokens, cookies, secrets and environment values are never written, and large base64 payloads are elided.
-- **Quitting** stops every stdio server MCP Manager started, including the processes they spawned.
-
-## Files it reads and writes
-
-| Where | Claude | Codex |
-| --- | --- | --- |
-| Global (read + write) | `~/.claude.json` → `mcpServers` | `~/.codex/config.toml` (or `$CODEX_HOME`) → `[mcp_servers.*]` |
-| Project (edit and remove in place) | `~/.claude.json` → `projects[path].mcpServers`, `<project>/.mcp.json` | `<project>/.codex/config.toml` |
-
-- MCP Manager's own files: variables you add per server in `~/Library/Application Support/MCP Manager/client-variables.json` (mode 0600), client logs in `~/Library/Logs/MCP Manager/`, and OAuth tokens in one login keychain item.
-- Before every write, the original file is copied to `~/Library/Application Support/MCP Manager/Backups/`. The newest 20 per file are kept.
-- Writes are atomic. If Claude or Codex rewrites the file mid-save, the edit is re-applied, up to 3 attempts.
-- Codex TOML is edited in place. Comments and unrelated tables are kept byte for byte.
-- Codex has no SSE transport, so an SSE server is added to Claude only, and the app says so.
-
-## Layout
-
-```text
-Sources/Core   config models, Claude JSON + Codex TOML stores, fuzzy matcher, and the MCP client:
-               JSON-RPC, stdio/HTTP/SSE transports, OAuth, environment, logs, helpful errors
-Sources/App    SwiftUI menu bar extra, main window and server pages
-Tests          swiftc-built test runner for Sources/Core, with Python fixture servers in Tests/Fixtures
-Tools/Capture  background screenshot harness behind bin/capture
-assets         app icon and logo (Orc-themed)
-```
+Plain `swiftc`, no SwiftPM or Xcode project. `Sources/Core` holds the config stores and MCP client, `Sources/App` the SwiftUI app.

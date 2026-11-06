@@ -4,6 +4,6 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p .build
-swiftc -Onone -swift-version 5 -target arm64-apple-macos14.0 -module-name CoreTests \
+swiftc -Onone -swift-version 5 -target "$(uname -m)-apple-macos14.0" -module-name CoreTests \
   Sources/Core/*.swift Tests/*.swift -o .build/core-tests
 .build/core-tests

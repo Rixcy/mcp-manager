@@ -235,6 +235,32 @@ private func runLogFileRotationTests() {
 // MARK: Formatting
 
 private func runLogFormattingTests() {
+    test("log formatting: plain text loses bearer tokens and well-known key formats") {
+        let line = "auth Bearer eyJhbGciOi.abc-123 key=sk-ant-api03-AbCdEf123456 gh=ghp_0123456789abcdefABCDEF pat=github_pat_11AAAA_bbbb slack=xoxb-1234-5678-abcd ok"
+        let detail = LogFormatting.detail(text: line)
+        for secret in ["eyJhbGciOi", "sk-ant-api03", "ghp_0123", "github_pat_11", "xoxb-1234"] {
+            expectTrue(!detail.contains(secret), "detail leaks \(secret): \(detail)")
+        }
+        expectTrue(detail.hasPrefix("auth Bearer [redacted] key=[redacted]"), detail)
+        expectTrue(detail.hasSuffix(" ok"), detail)
+        expectEqual(LogFormatting.detail(text: "Listening on port 3000"), "Listening on port 3000")
+    }
+
+    test("log formatting: token-like keys are redacted, counts and lookalikes are kept") {
+        let message: JSONValue = [
+            "token": "ghp_abc", "accessToken": "at-1", "github_token": "gh-2", "private_key": "pk-3",
+            "session_token": "st-4", "bearer": "b-5", "stripe_key": "sk-6",
+            "max_tokens": 100, "keyword": "open", "keys": "a,b",
+        ]
+        let redacted = LogFormatting.redacted(message)
+        for key in ["token", "accessToken", "github_token", "private_key", "session_token", "bearer", "stripe_key"] {
+            expectEqual(redacted[key], "[redacted]", key)
+        }
+        expectEqual(redacted["max_tokens"], 100)
+        expectEqual(redacted["keyword"], "open")
+        expectEqual(redacted["keys"], "a,b")
+    }
+
     test("log formatting: secrets are redacted at any depth, case-insensitively") {
         let message: JSONValue = [
             "method": "tools/call",

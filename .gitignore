@@ -5,7 +5,7 @@
 !.env.sample
 *.log
 
-# agent files (orc-init)
+# agent files
 .claude/settings.local.json
 *.local.md
 AGENTS.override.md

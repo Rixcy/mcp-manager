@@ -1,5 +1,21 @@
 import Foundation
 
+private final class RedirectGuard: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+    let serverURL: URL
+    let headers: [String: String]
+
+    init(serverURL: URL, headers: [String: String]) {
+        self.serverURL = serverURL
+        self.headers = headers
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse,
+                    newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
+        let from = task.originalRequest?.url ?? serverURL
+        completionHandler(HTTPExchange.guardedRedirect(request, from: from, configuredHeaders: headers))
+    }
+}
+
 /// What both HTTP transports share: configured headers, Authorization, one retry after
 /// a 401 the auth provider can fix, error mapping and status logging.
 final class HTTPExchange: @unchecked Sendable {
@@ -24,7 +40,31 @@ final class HTTPExchange: @unchecked Sendable {
         configuration.httpMaximumConnectionsPerHost = 16
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
-        session = URLSession(configuration: configuration)
+        session = URLSession(configuration: configuration,
+                             delegate: RedirectGuard(serverURL: serverURL, headers: headers),
+                             delegateQueue: nil)
+    }
+
+    /// URLSession copies every header onto a redirect but only drops Authorization itself,
+    /// so a configured API key would follow an open redirect to any host. Another origin
+    /// loses the configured headers, and a downgrade from https to http is not followed.
+    static func guardedRedirect(_ request: URLRequest, from original: URL,
+                                configuredHeaders: [String: String]) -> URLRequest? {
+        guard let target = request.url else { return nil }
+        let originalScheme = original.scheme?.lowercased()
+        let targetScheme = target.scheme?.lowercased()
+        if originalScheme == "https", targetScheme != "https" { return nil }
+        if origin(of: original) == origin(of: target) { return request }
+        var stripped = request
+        for name in configuredHeaders.keys { stripped.setValue(nil, forHTTPHeaderField: name) }
+        stripped.setValue(nil, forHTTPHeaderField: "Authorization")
+        return stripped
+    }
+
+    private static func origin(of url: URL) -> String {
+        let scheme = url.scheme?.lowercased() ?? ""
+        let port = url.port ?? (scheme == "https" ? 443 : 80)
+        return "\(scheme)://\(url.host?.lowercased() ?? ""):\(port)"
     }
 
     /// A configured Authorization header wins over the auth provider's.

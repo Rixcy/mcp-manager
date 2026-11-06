@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// Orc design tokens (`orc/theme/orc-tokens.json`) as appearance-aware colours.
+/// The app's design tokens as appearance-aware colours.
 enum Theme {
     static let bg = dynamic(day: 0xe3e5e4, night: 0x1a1c20)
     static let panel = dynamic(day: 0xeceeec, night: 0x16181b)
@@ -21,7 +21,7 @@ enum Theme {
     static let orange = dynamic(day: 0x9a5a25, night: 0xe69257)
 
     // AA text variants: small coloured text never uses a raw hue that fails 4.5:1,
-    // so the day values are mixed toward heading ink (DESIGN.md, AA Text Variant Rule).
+    // so the day values are mixed toward heading ink.
     static let gateText = dynamic(day: mix(0x9a5a25, 0x202722, 0.3), night: rgb(0xe69257))
     static let redText = dynamic(day: mix(0xb83f50, 0x202722, 0.2), night: rgb(0xe87878))
     static let greenText = dynamic(day: mix(0x53743a, 0x202722, 0.2), night: rgb(0x9dc76b))
