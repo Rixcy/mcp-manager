@@ -11,21 +11,25 @@ A macOS menu bar app that keeps your MCP servers in step across **Claude Code** 
 - **Project MCPs:** fuzzy-search any project Claude or Codex knows about (type `reels`, `rls`, …) and see every MCP configured for it.
 - **Menu bar:** quick list, sync, project search, and shortcuts into the full window.
 
-## Build and run
+## Install and open
 
 ```sh
-./build.sh            # builds "build/MCP Manager.app"
-./build.sh --install  # also copies it to ~/Applications
-bin/test              # core tests (real temp files, no mocks)
+./install.sh        # builds the app, installs it to ~/Applications, adds `mcp-manager` to ~/.local/bin
+mcp-manager open    # launches MCP Manager (if needed) and shows its window
+bin/test            # core tests (real temp files, no mocks)
 ```
+
+`./install.sh --build-only` stops after building `build/MCP Manager.app`. Set `MCP_MANAGER_BIN_DIR` to put the command somewhere other than `~/.local/bin`.
 
 SwiftPM is not used. Everything compiles with plain `swiftc` (macOS 14+, Command Line Tools are enough).
 
 To try the app without touching your real configs, point it at a throwaway home:
 
 ```sh
-open -n "build/MCP Manager.app" --env MCP_MANAGER_HOME="$(bin/fixture-home "$(mktemp -d)")"
+MCP_MANAGER_HOME="$(bin/fixture-home "$(mktemp -d)")" mcp-manager open
 ```
+
+Quit any running copy first: the home is only read at launch.
 
 ## Files it reads and writes
 

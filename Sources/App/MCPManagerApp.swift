@@ -22,7 +22,11 @@ struct MCPManagerApp: App {
             MainWindow()
                 .environmentObject(model)
                 .tint(Theme.accent)
+                .onOpenURL { _ in NSApp.activate(ignoringOtherApps: true) }
         }
+        // `mcp-manager open` sends mcp-manager://open; claiming it here opens
+        // this window instead of a stray new scene.
+        .handlesExternalEvents(matching: ["open"])
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 980, height: 640)
         .windowResizability(.contentMinSize)

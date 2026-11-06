@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# Command-line entry for MCP Manager. ./install.sh copies this to ~/.local/bin.
+set -euo pipefail
+
+APP="${MCP_MANAGER_APP:-$HOME/Applications/MCP Manager.app}"
+
+usage() {
+    cat <<EOF
+usage: mcp-manager <command>
+
+commands:
+  open    launch MCP Manager (if needed) and show its window
+
+env:
+  MCP_MANAGER_APP   app bundle to open (default: ~/Applications/MCP Manager.app)
+  MCP_MANAGER_HOME  home folder the app reads configs from, applied on launch
+EOF
+}
+
+case "${1:-}" in
+    open)
+        if [[ ! -d "$APP" ]]; then
+            echo "mcp-manager: $APP not found. Run ./install.sh from the mcp-manager repo first." >&2
+            exit 1
+        fi
+        args=(-a "$APP")
+        if [[ -n "${MCP_MANAGER_HOME:-}" ]]; then
+            args+=(--env "MCP_MANAGER_HOME=$MCP_MANAGER_HOME")
+        fi
+        # The URL reaches the app whether it is already running or not, and
+        # the main window scene claims it (see MCPManagerApp.swift).
+        open "${args[@]}" "mcp-manager://open"
+        ;;
+    -h|--help|help)
+        usage
+        ;;
+    "")
+        usage >&2
+        exit 2
+        ;;
+    *)
+        echo "mcp-manager: unknown command: $1" >&2
+        usage >&2
+        exit 2
+        ;;
+esac

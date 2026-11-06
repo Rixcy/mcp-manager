@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds build/MCP Manager.app. Pass --install to copy it to ~/Applications.
+# Builds "MCP Manager.app", installs it to ~/Applications and puts the
+# `mcp-manager` command on your PATH. Pass --build-only to stop after the build.
 # Never launches the app: a launch reads and writes the real Claude/Codex configs.
 set -euo pipefail
 
@@ -10,13 +11,17 @@ CONTENTS="$APP_BUNDLE/Contents"
 MACOS_DIR="$CONTENTS/MacOS"
 RESOURCES_DIR="$CONTENTS/Resources"
 APP_DEST="$HOME/Applications/MCP Manager.app"
+BIN_DIR="${MCP_MANAGER_BIN_DIR:-$HOME/.local/bin}"
+BUNDLE_ID="com.rickbooth.mcp-manager"
+LSREGISTER=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-INSTALL=0
+INSTALL=1
 for arg in "$@"; do
     case "$arg" in
-        --install) INSTALL=1 ;;
+        --build-only) INSTALL=0 ;;
         -h|--help)
-            echo "usage: $0 [--install]"
+            echo "usage: $0 [--build-only]"
+            echo "  installs the app to ~/Applications and the mcp-manager command to \$MCP_MANAGER_BIN_DIR (default ~/.local/bin)"
             exit 0
             ;;
         *)
@@ -72,12 +77,31 @@ swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
 echo "==> Ad-hoc code signing"
 codesign --force --sign - "$APP_BUNDLE"
 
-if [[ "$INSTALL" == 1 ]]; then
-    echo "==> Installing to $APP_DEST"
-    rm -rf "$APP_DEST"
-    mkdir -p "$(dirname "$APP_DEST")"
-    ditto "$APP_BUNDLE" "$APP_DEST"
-    echo "==> Installed: $APP_DEST"
-else
-    echo "==> Built: $APP_BUNDLE (run with --install to copy to ~/Applications)"
+if [[ "$INSTALL" == 0 ]]; then
+    echo "==> Built: $APP_BUNDLE"
+    exit 0
 fi
+
+# A running copy would keep serving `mcp-manager open` from the old binary.
+if pgrep -qf "^$APP_DEST/Contents/MacOS/MCPManager"; then
+    echo "==> Quitting the running MCP Manager"
+    osascript -e "tell application id \"$BUNDLE_ID\" to quit" >/dev/null 2>&1 || true
+fi
+
+echo "==> Installing app to $APP_DEST"
+rm -rf "$APP_DEST"
+mkdir -p "$(dirname "$APP_DEST")"
+ditto "$APP_BUNDLE" "$APP_DEST"
+if [[ -x "$LSREGISTER" ]]; then
+    "$LSREGISTER" -f "$APP_DEST"
+fi
+
+echo "==> Installing mcp-manager to $BIN_DIR"
+mkdir -p "$BIN_DIR"
+install -m 0755 "$REPO/bin/mcp-manager" "$BIN_DIR/mcp-manager"
+
+echo "==> Installed. Open it with: mcp-manager open"
+case ":$PATH:" in
+    *":$BIN_DIR:"*) ;;
+    *) echo "NOTE: $BIN_DIR is not on your PATH. Add it, or run $BIN_DIR/mcp-manager open" ;;
+esac

@@ -18,6 +18,17 @@
 	<string>MCP Manager</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.rickbooth.mcp-manager</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>mcp-manager</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleShortVersionString</key>
 	<string>0.1.0</string>
 	<key>CFBundleVersion</key>
